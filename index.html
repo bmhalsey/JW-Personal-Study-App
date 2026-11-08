@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>Study Log</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F2F5F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1618" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Study Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: one phone-width column. Wordmark and sync status, a three-number streak strip, a four-part switch (Today / Week / Library / Review), then the active view. */
+:root{
+  --bg:#F2F5F4; --surface:#FFFFFF; --sunken:#E5ECEA; --fg:#14262B; --muted:#55696D;
+  --line:#D3DDDB; --line-strong:#7C9390;
+  --accent:#1D6B68; --accent-fg:#FFFFFF; --gold:#8F5609; --danger:#B3362B;
+  --heat1:#BFDCD9; --heat2:#7DB9B3; --shadow:rgba(20,38,43,.14);
+  --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --font-body:'Source Sans 3','Segoe UI',system-ui,sans-serif;
+  --radius:10px;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0E1618; --surface:#162226; --sunken:#1C2B30; --fg:#E3ECEA; --muted:#93A7AA;
+    --line:#2B3C41; --line-strong:#5E777C;
+    --accent:#5CC7BE; --accent-fg:#06201F; --gold:#E5B455; --danger:#F08A80;
+    --heat1:#1F4A48; --heat2:#2A706B; --shadow:rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+html{background:var(--bg)}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-body); font-size:16px; line-height:1.45;
+  padding-top:max(16px,env(safe-area-inset-top,0px));
+  padding-bottom:max(56px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+[hidden]{display:none!important}
+button,input,textarea,select{font-family:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.wrap>*{min-width:0}
+
+.mast{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap}
+.brand{margin:0;font:600 13px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.status{margin:0;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.status.err{color:var(--danger)}
+.link{background:none;border:0;padding:4px 0;min-height:32px;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer}
+
+.cap{margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.streak-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-block:1px solid var(--line)}
+.streak{padding:12px 8px;display:flex;flex-direction:column;gap:4px;border-left:1px solid var(--line)}
+.streak:first-child{border-left:0;padding-left:0}
+.streak b{font:700 32px/1 var(--font-display);font-variant-numeric:tabular-nums;color:var(--muted)}
+.streak.on b{color:var(--gold)}
+.streak span{font-size:13px;color:var(--muted)}
+
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
+.tabs button{border:0;background:transparent;color:var(--muted);font:600 14px var(--font-body);min-height:44px;padding:8px 4px;border-radius:9px;cursor:pointer}
+.tabs button[aria-current="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px var(--shadow)}
+
+.view{display:flex;flex-direction:column;gap:16px}
+.view>*{min-width:0}
+.sect{margin:0;font:700 22px/1.2 var(--font-display)}
+.subhead{margin:8px 0 0;font:600 17px/1.25 var(--font-display)}
+.hint{margin:0;font-size:14px;color:var(--muted)}
+
+.subtabs{display:flex;gap:8px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.pill{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--fg);font:600 14px var(--font-body);cursor:pointer}
+.pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+.datenav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px}
+.datetext{text-align:center}
+.datetext h2{margin:0;font:700 24px/1.15 var(--font-display);text-wrap:balance}
+.datetext p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.icon{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:grid;place-items:center;cursor:pointer;padding:0}
+.icon:disabled{opacity:.35;cursor:default}
+.jump{margin:-8px 0 0;text-align:center}
+
+.progress{display:flex;flex-direction:column;gap:8px}
+.segs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg{height:6px;border-radius:3px;background:var(--sunken)}
+.seg.on{background:var(--accent)}
+.progress p{margin:0;font-size:14px;color:var(--muted)}
+
+#habits{display:flex;flex-direction:column;gap:12px}
+.habit{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.habit-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px}
+.check{width:44px;height:44px;border-radius:12px;border:2px solid var(--line-strong);background:transparent;color:transparent;display:grid;place-items:center;cursor:pointer;padding:0}
+.check[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.habit-title{min-width:0}
+.habit-title h3{margin:0;font:600 18px/1.2 var(--font-display)}
+.habit-sum{margin:2px 0 0;font-size:14px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.habit-sum.none{color:var(--muted)}
+.toggle{display:flex;align-items:center;gap:4px;min-height:44px;padding:0 4px;border:0;background:none;color:var(--accent);font:600 14px var(--font-body);cursor:pointer}
+.toggle svg{transition:transform .15s}
+.toggle.open svg{transform:rotate(180deg)}
+.habit-body{display:flex;flex-direction:column;gap:14px;padding:4px 12px 16px}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--muted)}
+input[type=text],input[type=search],input[type=password],textarea,select{
+  width:100%;font:400 16px/1.4 var(--font-body);color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+}
+select{min-height:44px}
+textarea{resize:vertical;min-height:84px}
+textarea.tall{min-height:280px}
+::placeholder{color:var(--muted);opacity:1}
+.checkrow{display:flex;gap:12px;align-items:flex-start;padding:6px 0}
+.checkrow input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.checkrow label{font-size:16px;color:var(--fg)}
+
+.btn{min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:10px;background:var(--accent);color:var(--accent-fg);font:600 15px var(--font-body);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border-color:var(--line-strong)}
+.btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:default}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.bar{display:flex;gap:8px;align-items:center}
+.bar input{flex:1;min-width:0}
+.bar.wrapbar{flex-wrap:wrap}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.helpbox{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--bg)}
+.helpcap{margin:0;font-size:13px;font-weight:600;color:var(--muted)}
+.helptext{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px}
+
+.rows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.row{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:14px 2px;color:var(--fg);font:inherit;cursor:pointer}
+.row:hover{background:var(--sunken)}
+.row h3{margin:0 0 4px;font:600 17px/1.25 var(--font-display);overflow-wrap:anywhere}
+.row .meta{display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.row .when{font-size:15px;font-weight:600;color:var(--fg)}
+.row .snip{margin:6px 0 0;font-size:15px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row .snip.hint{color:var(--muted)}
+.chip{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sunken);color:var(--muted)}
+.dots{display:inline-flex;gap:4px}
+.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--line-strong)}
+.dot.on{background:var(--accent);border-color:var(--accent)}
+.empty-note{margin:0;padding:20px 2px;color:var(--muted);font-size:15px}
+
+.editor{display:flex;flex-direction:column;gap:14px}
+.confirm{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--danger);border-radius:var(--radius)}
+.confirm p{margin:0;font-size:15px}
+
+.stat{display:flex;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.stat b{font-variant-numeric:tabular-nums}
+#monthStats{border-top:1px solid var(--line)}
+
+.qcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.qtext{margin:0;font:600 19px/1.3 var(--font-display);overflow-wrap:anywhere}
+.verdict{display:inline-block;align-self:flex-start;font-size:13px;font-weight:600;padding:2px 10px;border-radius:999px}
+.verdict.correct{background:var(--accent);color:var(--accent-fg)}
+.verdict.partial{background:var(--gold);color:var(--bg)}
+.verdict.missed{background:var(--danger);color:var(--bg)}
+
+.heatwrap{max-width:320px;display:flex;flex-direction:column;gap:6px}
+.dow,.heat{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.dow span{font-size:12px;color:var(--muted);text-align:center}
+.cell{aspect-ratio:1;max-width:100%;border:0;border-radius:8px;padding:0;background:var(--sunken);color:var(--fg);font:600 13px var(--font-body);font-variant-numeric:tabular-nums;cursor:pointer}
+.cell.c1{background:var(--heat1)}
+.cell.c2{background:var(--heat2)}
+.cell.c3{background:var(--accent);color:var(--accent-fg)}
+.cell.today{box-shadow:inset 0 0 0 2px var(--fg)}
+.cell.sel{outline:2px solid var(--accent);outline-offset:2px}
+.cell.empty{background:transparent;cursor:default}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.mast .right{display:flex;align-items:baseline;gap:4px 14px;flex-wrap:wrap;justify-content:flex-end}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface)}
+.banner p{margin:0;font-size:15px}
+.note{margin:0;padding:10px 12px;border-radius:8px;background:var(--sunken);font-size:14px;color:var(--fg)}
+.pbar{height:8px;border-radius:4px;background:var(--sunken);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent)}
+.chgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.chbtn{min-height:48px;border-radius:10px;border:1px solid var(--line-strong);background:transparent;color:var(--fg);font:600 16px var(--font-body);font-variant-numeric:tabular-nums;cursor:pointer}
+.chbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.vref{margin:0;font:700 26px/1.2 var(--font-display);overflow-wrap:anywhere}
+.qlist{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px}
+details{border:1px solid var(--line);border-radius:8px;padding:0 12px;background:var(--bg)}
+details summary{min-height:44px;display:flex;align-items:center;font-weight:600;cursor:pointer}
+details[open] summary{border-bottom:1px solid var(--line);margin-bottom:10px}
+details>*:not(summary){margin-block:0 12px}
+pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:all}
+.setsec{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.setsec>*{min-width:0}
+.setsec h3{margin:0;font:700 18px/1.2 var(--font-display)}
+.setsec p{margin:0}
+.qcard .chip{align-self:flex-start}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="mast">
+    <h1 class="brand">Daily Study Log</h1>
+    <div class="right">
+      <p class="status" id="status" role="status" aria-live="polite"><span id="statusText">Loading your entries...</span><button type="button" class="link" id="retry" hidden>Retry</button></p>
+      <button type="button" class="link" id="openSettings">Settings</button>
+    </div>
+    <p class="note" id="syncNote" hidden style="flex-basis:100%"></p>
+  </header>
+
+  <section aria-label="Current streaks">
+    <p class="cap">Day streaks</p>
+    <div class="streak-grid" id="streakGrid"></div>
+  </section>
+
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" data-tab="today" aria-current="true">Today</button>
+    <button type="button" data-tab="week" aria-current="false">Week</button>
+    <button type="button" data-tab="library" aria-current="false">Library</button>
+    <button type="button" data-tab="review" aria-current="false">Review</button>
+  </nav>
+
+  <main>
+    <section class="view" id="view-today">
+      <div class="datenav">
+        <button type="button" class="icon" id="prev" aria-label="Previous day"></button>
+        <div class="datetext"><h2 id="dateTitle"></h2><p id="dateRel"></p></div>
+        <button type="button" class="icon" id="next" aria-label="Next day"></button>
+      </div>
+      <p class="jump" id="jumpWrap" hidden><button type="button" class="link" id="jumpToday">Back to today</button></p>
+      <div class="progress">
+        <div class="segs" id="segs"></div>
+        <p id="progressText"></p>
+      </div>
+      <div class="banner" id="sunBanner" hidden></div>
+      <p class="hint" id="weekHint" hidden></p>
+      <p class="hint" id="firstRun" hidden>Check off what you finished and add notes under Notes. Entries save on this device. Settings has sync, backup and AI help.</p>
+      <div id="habits"></div>
+    </section>
+
+    <section class="view" id="view-week" hidden>
+      <div class="datenav">
+        <button type="button" class="icon" id="wprev" aria-label="Previous week"></button>
+        <div class="datetext"><h2 id="weekTitle"></h2><p id="weekRel"></p></div>
+        <button type="button" class="icon" id="wnext" aria-label="Next week"></button>
+      </div>
+      <div class="view" id="weekForm"></div>
+    </section>
+
+    <section class="view" id="view-library" hidden>
+      <div class="subtabs" id="libTabs"></div>
+      <div id="libBody"></div>
+    </section>
+
+    <section class="view" id="view-review" hidden>
+      <div class="subtabs" id="revTabs"></div>
+
+      <div class="view" id="revQuiz"></div>
+      <div class="view" id="revVerses" hidden></div>
+
+      <div class="view" id="revMonth" hidden>
+        <div class="datenav">
+          <button type="button" class="icon" id="mprev" aria-label="Previous month"></button>
+          <div class="datetext"><h2 id="monthTitle"></h2></div>
+          <button type="button" class="icon" id="mnext" aria-label="Next month"></button>
+        </div>
+        <div id="monthStats"></div>
+        <div class="view" id="monthForm"></div>
+      </div>
+
+      <div class="view" id="revHistory" hidden>
+        <div>
+          <p class="cap" id="heatCap">Last 6 weeks</p>
+          <div class="heatwrap">
+            <div class="dow" aria-hidden="true"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+            <div class="heat" id="heat"></div>
+          </div>
+          <p class="hint" style="margin-top:8px">Each square is a day. Darker means more of the three done. Tap a day to open it.</p>
+        </div>
+        <input type="search" id="histSearch" placeholder="Search past entries" aria-label="Search past entries" autocomplete="off">
+        <div class="rows" id="histRows"></div>
+        <p class="jump" id="moreWrap" hidden><button type="button" class="btn ghost" id="more">Show more days</button></p>
+      </div>
+    </section>
+
+    <section class="view" id="view-settings" hidden></section>
+  </main>
+</div>
+
+
+<script src="adapters.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
