@@ -2807,6 +2807,63 @@ function paintDtHints(){
   }
   renderTodayChapters();
 }
+/* ---------- book and section introductions (intros.js) ---------- */
+function sectionStartCh(bi,ch){
+  const s=SECTION_STARTS[BOOKS[bi][0]]||[];
+  return [1].concat(s).filter(c=>c<=ch).pop();
+}
+const isSectionStart=(bi,ch)=>ch===1||(SECTION_STARTS[BOOKS[bi][0]]||[]).indexOf(ch)>=0;
+function introLinks(bi,ch){
+  const book=BOOKS[bi][0];
+  return el('div',{class:'reflinks'},
+    el('a',{class:'reflink',href:'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+String(bi+1).padStart(2,'0')+String(ch).padStart(3,'0')+'001'},(ch===1?book+' in the Study Bible':'Study notes for '+book+' '+ch)),
+    el('a',{class:'reflink alt',href:'https://www.jw.org/en/search/?q='+encodeURIComponent('Introduction to '+book),target:'_blank',rel:'noopener noreferrer'},'“Introduction to '+book+'” video',svg(ICON_OUT)));
+}
+function bookIntroEl(bi){
+  const I=(window.BIBLE_INTROS||{})[BOOKS[bi][0]];
+  if(!I) return null;
+  const fact=(l,v)=>el('div',{class:'stat'},el('span',{text:l}),el('b',{text:v}));
+  return el('div',{class:'introbook'},
+    el('div',{class:'introfacts'},fact('Name means',I.meaning),fact('Writer',I.writer),fact('Written',I.written),fact('Time covered',I.covers)),
+    el('p',{text:I.setting}),
+    el('p',{},el('b',{text:'Why it matters: '}),I.why),
+    el('p',{class:'boxlabel',text:'Watch for'}),
+    el('ul',{class:'qlist'},I.watch.map(w=>el('li',{text:w}))),
+    el('p',{class:'hint'},'Written for this app, based on: ',...I.sources.map((x,i)=>[i?' · ':'',el('a',{href:x[1],target:'_blank',rel:'noopener noreferrer',text:x[0]})]).flat()));
+}
+/* Shown in Bible reading: a book's introduction on the day you start it, a short section
+   introduction on the day a new section starts, and a folded "About" panel on other days */
+function renderBibleIntro(){
+  const box=$('bibleIntro');
+  if(!box) return;
+  let chs=todayChapters(draft.date);
+  if(!chs.length){const r=parseRef(draft.bible.ref).out[0];if(r) chs=r.chapters.map(c=>gIndex(r.bi,c));}
+  if(!chs.length){box.replaceChildren();return;}
+  const start=chs.map(gPos).find(p=>isSectionStart(p.bi,p.ch));
+  const p0=start||gPos(chs[0]);
+  const book=BOOKS[p0.bi][0],I=(window.BIBLE_INTROS||{})[book];
+  const secCh=sectionStartCh(p0.bi,p0.ch);
+  const secText=I&&I.sections&&I.sections[secCh];
+  if(start){
+    const newBook=start.ch===1;
+    const kids=[el('p',{class:'introcap',text:newBook?'New book: '+book:'New section: '+book+' '+start.ch})];
+    if(newBook&&I){
+      kids.push(bookIntroEl(p0.bi));
+      if(secText) kids.push(el('p',{class:'introcap',text:'First section'}),el('p',{class:'introsec',text:secText}));
+    }else{
+      if(secText) kids.push(el('p',{class:'introsec',text:secText}));
+      if(I) kids.push(el('details',{class:'dtfull'},el('summary',{text:'About '+book}),bookIntroEl(p0.bi)));
+    }
+    if(!I) kids.push(el('p',{class:'hint',text:'My introduction for '+book+' is still being written. The Study Bible and video below are the best place to start.'}));
+    kids.push(introLinks(p0.bi,start.ch));
+    box.replaceChildren(el('section',{class:'introcard'},kids));
+    return;
+  }
+  if(!I){box.replaceChildren();return;}
+  box.replaceChildren(el('details',{class:'dtfull'},el('summary',{text:'About '+book+(secText?' and this section':'')}),
+    secText?el('p',{class:'introsec',text:secText}):null,bookIntroEl(p0.bi),introLinks(p0.bi,secCh)));
+}
+
 /* Bible reading: today's planned chapters, each with a box to tick and a link into JW Library.
    Ticking them all checks off Bible reading for the day. */
 function chapterHref(g){const p=gPos(g);return 'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+String(p.bi+1).padStart(2,'0')+String(p.ch).padStart(3,'0')+'001';}
@@ -2817,6 +2874,7 @@ function todayChapters(k){
   return day?day.chs:[];
 }
 function renderTodayChapters(){
+  renderBibleIntro();
   const box=$('todayCh');
   if(!box) return;
   const chs=todayChapters(draft.date);
