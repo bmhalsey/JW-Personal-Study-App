@@ -8,12 +8,11 @@ python3 -m http.server 8000 --bind 127.0.0.1
 
 ## Writing and finding notes
 
-- Today offers a study session, a recent notebook entry, scriptures due for review, and an open research question.
-- **Write** opens a spacious editor for each daily study. **Quick note** opens a notebook entry. Optional prompts, headings, bold, lists, checklists, quotes, and web links use portable text formatting. **Read note** renders that formatting.
-- Select text to save a connected question or scripture, or mark an application. Daily studies can be copied into the Notebook with a source connection.
+- Today shows the daily text card first, then your three study sections. **Daily text** and **Bible reading** each have one set of boxes under **Notes**; sections that already have notes open by themselves.
+- **Personal study** and **Notebook** entries use the full-screen writer for longer writing. Personal study's application and next question sit under the writer, with **Save to Questions**.
+- One formatting bar works in every text box and the writer: bold, headings, bullets, numbers, checklists, quotes, indent/outdent and web links. Notes stay as portable plain text; **Read note** shows the formatting.
 - **Connected thoughts** links entries and shows incoming links. **Search everything** (or Ctrl/Cmd+K) searches daily studies, library entries, weekly/monthly notes, ministry notes, and quiz results.
-- Existing structured daily fields remain available under **Study fields**. Meeting preparation and reading plans retain their forms.
-- Settings lets you enable streaks and completion tracking; both are hidden by default.
+- Streaks and daily completion tracking are shown by default; either can be turned off in Settings.
 
 ## Saving and recovery
 
