@@ -2328,7 +2328,20 @@ $('mprev').addEventListener('click',()=>goMonth(-1));
 $('mnext').addEventListener('click',()=>{if(S.monthSel<monthOf(new Date())) goMonth(1);});
 $('retry').addEventListener('click',()=>{setStatus('Saving...');pump();});
 $('openSettings').addEventListener('click',()=>setTab('settings'));
-if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  /* when an update arrives, save what is open and reload once so the new version runs */
+  const hadSW=!!navigator.serviceWorker.controller;
+  let reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadSW||reloading) return;
+    reloading=true;
+    try{flushAll();}catch(e){}
+    setTimeout(()=>location.reload(),400);
+  });
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') r.update().catch(()=>{});});
+  }).catch(()=>{});
+}
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
 $('histSearch').addEventListener('input',e=>{S.hq=e.target.value;S.histLimit=30;renderHistory();});
 $('more').addEventListener('click',()=>{S.histLimit+=30;renderHistory();});
