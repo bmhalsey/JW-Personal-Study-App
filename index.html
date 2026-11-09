@@ -383,6 +383,22 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .refchips{display:flex;flex-wrap:wrap;gap:6px}
 .refchip{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:var(--sunken);color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
 
+/* numbered routine on Today */
+.stepn{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;border:2px solid var(--line-strong);font:700 12px var(--font-body);color:var(--muted);vertical-align:2px}
+
+/* privacy lock */
+body.locked .wrap{visibility:hidden}
+#lockScreen{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px 24px;background:var(--bg);color:var(--fg)}
+#lockScreen h2{margin:0;font:700 26px/1.2 var(--font-display)}
+#lockScreen .brand{margin:0}
+.lockdots{display:flex;gap:16px}
+.lockdots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent)}
+.lockdots span.on{background:var(--accent)}
+.lockmsg{margin:0;min-height:22px;font-size:15px;color:var(--danger)}
+.lockpad{display:grid;grid-template-columns:repeat(3,72px);gap:16px 22px}
+.lockkey{height:72px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 26px var(--font-display);cursor:pointer}
+.lockkey.del{border:0;background:transparent;color:var(--muted);font-size:24px}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}

@@ -1209,7 +1209,7 @@ function buildHabits(){
       if(qs) qs.append(body.querySelector('#saveq-bible'));
     }
     box.append(el('section',{class:'habit',id:'habit-'+k},
-      el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{text:hb.label}),sum,el('small',{class:'hint',id:'edited-'+k})),write),
+      el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{},el('span',{class:'stepn','aria-hidden':'true',text:String(HABITS.indexOf(hb)+1)}),hb.label),sum,el('small',{class:'hint',id:'edited-'+k})),write),
       el('div',{class:'habit-details'},tg,body)));
   });
 }
@@ -1308,7 +1308,7 @@ async function dayHelp(k){
 function renderProgress(){
   const n=doneCount(draft);
   $('segs').replaceChildren(...HABITS.map(hb=>el('span',{class:'seg'+(draft[hb.key].done?' on':'')})));
-  $('progressText').textContent=n===3?'All three done':n+' of 3 done';
+  $('progressText').textContent=n===3?"Today's routine · all three done":"Today's routine · "+n+' of 3 done';
 }
 function renderToday(){
   const t=todayKey(),d=parseKey(S.sel);
@@ -2587,6 +2587,7 @@ function dailyTextSection(){
       el('span',{text:y+': '+DT.years[y].count+' days loaded'}),
       el('button',{type:'button',class:'link',onclick:async()=>{
         try{await dtStore(y,true);}catch(e){}
+        if(S.mode==='cloud'&&S.root){try{await S.root.collection('dailytext').doc(y).delete();}catch(e){}}
         delete DT.years[y];paintList();renderDailyCard();paintDtHints();
         msg.textContent='Removed '+y+'.';
       }},'Remove'))));
@@ -2618,7 +2619,9 @@ function dailyTextSection(){
   return el('section',{class:'setsec'},
     el('h3',{text:'Daily text'}),
     el('p',{text:"Load Examining the Scriptures Daily as an EPUB file from jw.org. Each day's scripture then shows in large letters at the top of Today, with the comments."}),
-    el('p',{class:'hint',text:'The file stays on this device. It is not uploaded, synced or put in backups, so load it on each device you use. Load next year\'s book the same way when it comes out.'}),
+    el('p',{class:'hint',text:window.DSL.syncInfo().mode==='cloud'
+      ?'Saved privately in your account, so it shows on every device where you sign in. Nobody else can see it. It is not put in backups. Load next year\'s book the same way when it comes out.'
+      :'The file stays on this device and is not put in backups. Sign in under "Sign in and sync" and it will be saved privately in your account for your other devices. Load next year\'s book the same way when it comes out.'}),
     list,el('div',{class:'actions'},pick),file,msg,
     el('p',{class:'hint',text:'Need the file? Open the book on jw.org, tap the download button, and choose EPUB. Then come back and load it here.'}),
     getLinks);
@@ -2697,6 +2700,112 @@ function weekSection(D){
     el('div',{class:'checkrow'},cb,el('label',{for:'s-family',text:'Show Family Worship'})),
     el('p',{class:'hint',text:'Turn this off if Family Worship does not apply to you. This is saved on this device.'}));
 }
+/* ---------- privacy lock ----------
+   A PIN screen over the app when it opens or comes back after a while. It keeps notes private
+   from someone picking up the phone; it is not encryption. It can only be turned on while
+   signed in, so a forgotten PIN can be reset by signing in again. */
+const LOCK={hiddenAt:0,entry:''};
+async function pinHash(pin){
+  const data=new TextEncoder().encode('study-log-pin:'+pin);
+  const buf=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function lockOn(){return !!window.DSL.settings.lockHash;}
+function showLock(){
+  if(!lockOn()||$('lockScreen')) return;
+  LOCK.entry='';
+  try{flushAll();}catch(e){}
+  const dots=el('div',{class:'lockdots',role:'img','aria-label':'0 of 4 digits entered'},[0,1,2,3].map(()=>el('span')));
+  const msg=el('p',{class:'lockmsg',role:'status'});
+  const paint=()=>{dots.querySelectorAll('span').forEach((d,i)=>d.classList.toggle('on',i<LOCK.entry.length));dots.setAttribute('aria-label',LOCK.entry.length+' of 4 digits entered');};
+  const press=async d=>{
+    if(LOCK.entry.length>=4) return;
+    LOCK.entry+=d;paint();
+    if(LOCK.entry.length===4){
+      const ok=(await pinHash(LOCK.entry))===window.DSL.settings.lockHash;
+      if(ok){unlock();return;}
+      msg.textContent='That PIN is not right. Try again.';LOCK.entry='';setTimeout(paint,250);
+    }
+  };
+  const key=d=>el('button',{type:'button',class:'lockkey',onclick:()=>press(d)},d);
+  const scr=el('div',{id:'lockScreen',role:'dialog','aria-modal':'true','aria-label':'Enter your PIN'},
+    el('p',{class:'brand',text:document.title}),
+    el('h2',{text:'Enter your PIN'}),dots,msg,
+    el('div',{class:'lockpad'},['1','2','3','4','5','6','7','8','9'].map(key),el('span'),key('0'),
+      el('button',{type:'button',class:'lockkey del','aria-label':'Delete',onclick:()=>{LOCK.entry=LOCK.entry.slice(0,-1);paint();}},'⌫')),
+    el('button',{type:'button',class:'link',onclick:forgotPin},'Forgot PIN? Sign in with your email instead'));
+  document.body.append(scr);
+  document.body.classList.add('locked');
+  scr.addEventListener('keydown',e=>{if(/^[0-9]$/.test(e.key)) press(e.key);else if(e.key==='Backspace'){LOCK.entry=LOCK.entry.slice(0,-1);paint();}});
+  scr.tabIndex=-1;scr.focus();
+}
+function unlock(){const s=$('lockScreen');if(s) s.remove();document.body.classList.remove('locked');}
+async function forgotPin(){
+  if(!confirm('To reset your PIN, you will be signed out. Your notes stay safe in your account. Sign in again under Settings, then set a new PIN. Continue?')) return;
+  window.DSL.saveSettings({lockHash:''});
+  try{await window.DSL.cloudSignOut();}catch(e){}
+  location.reload();
+}
+function setupLock(){
+  if(lockOn()) showLock();
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'){LOCK.hiddenAt=Date.now();return;}
+    const after=Number(window.DSL.settings.lockAfter);
+    const wait=(isNaN(after)?5:after)*60000;
+    if(lockOn()&&LOCK.hiddenAt&&Date.now()-LOCK.hiddenAt>=wait) showLock();
+  });
+}
+function lockSection(D){
+  const st=D.settings,msg=el('p',{class:'hint',role:'status'});
+  const signedIn=D.syncInfo().mode==='cloud';
+  const kids=[el('h3',{text:'Privacy lock'}),
+    el('p',{class:'hint',text:'Ask for a 4-digit PIN when the app opens, so your notes stay private if someone else picks up your phone.'})];
+  if(!st.lockHash){
+    if(!signedIn){
+      kids.push(el('p',{class:'note',text:'Sign in under "Sign in and sync" first. That way, if you ever forget your PIN, you can reset it by signing in again.'}));
+    }else{
+      const a=el('input',{type:'password',inputmode:'numeric',maxlength:'4',id:'s-pin1',autocomplete:'new-password',placeholder:'4 digits'});
+      const b=el('input',{type:'password',inputmode:'numeric',maxlength:'4',id:'s-pin2',autocomplete:'new-password',placeholder:'Same 4 digits again'});
+      kids.push(labeled('New PIN',a),labeled('Repeat the PIN',b),el('div',{class:'actions'},el('button',{type:'button',class:'btn',onclick:async()=>{
+        if(!/^\d{4}$/.test(a.value)){msg.textContent='Use exactly 4 digits.';return;}
+        if(a.value!==b.value){msg.textContent='The two PINs do not match.';return;}
+        if(!D.saveSettings({lockHash:await pinHash(a.value),lockAfter:st.lockAfter==null?5:st.lockAfter})){msg.textContent='Could not save the PIN on this device.';return;}
+        renderSettings();
+      }},'Turn on the lock')));
+    }
+  }else{
+    const after=el('select',{id:'s-lockafter'},[[0,'Every time it opens'],[1,'After 1 minute away'],[5,'After 5 minutes away'],[15,'After 15 minutes away']].map(o=>el('option',{value:o[0],text:o[1]})));
+    after.value=String(st.lockAfter==null?5:st.lockAfter);
+    after.addEventListener('change',()=>D.saveSettings({lockAfter:Number(after.value)}));
+    const cur=el('input',{type:'password',inputmode:'numeric',maxlength:'4',id:'s-pincur',autocomplete:'current-password',placeholder:'Current PIN'});
+    kids.push(el('p',{class:'note',text:'The lock is on.'}),labeled('Lock',after),labeled('To turn it off, enter your current PIN',cur),
+      el('div',{class:'actions'},el('button',{type:'button',class:'btn ghost',onclick:async()=>{
+        if((await pinHash(cur.value))!==st.lockHash){msg.textContent='That PIN is not right.';return;}
+        D.saveSettings({lockHash:''});renderSettings();
+      }},'Turn off the lock')));
+  }
+  kids.push(msg);
+  return el('section',{class:'setsec',id:'lockSection'},kids);
+}
+
+/* ---------- reminders: an iPhone Shortcut opens the app at a set time ---------- */
+function remindersSection(){
+  const msg=el('p',{class:'hint',role:'status'});
+  const link=new URL('./',location.href).href;
+  return el('section',{class:'setsec'},
+    el('h3',{text:'Reminders'}),
+    el('p',{class:'hint',text:'Use the free Shortcuts app on your iPhone to open the Study Log at the same time every day.'}),
+    el('ol',{class:'qlist'},
+      el('li',{text:'Open the Shortcuts app, tap Automation, then New Automation (or +).'}),
+      el('li',{text:'Choose Time of Day, pick a time such as 7:00 AM, and choose Daily.'}),
+      el('li',{text:'Set it to Run Immediately, then tap Next.'}),
+      el('li',{text:'Add the action Open URLs, and paste the link copied below.'}),
+      el('li',{text:'Tap Done. Make a second one for Saturday evening to plan next week\'s reading.'})),
+    el('div',{class:'actions'},el('button',{type:'button',class:'btn ghost',onclick:async()=>{
+      try{await navigator.clipboard.writeText(link);msg.textContent='Copied: '+link;}catch(e){msg.textContent='Copy this link: '+link;}
+    }},'Copy the app\'s link')),
+    el('p',{class:'hint',text:'On Android, the Clock app\'s alarm or a routine in your phone\'s settings can do the same.'}),msg);
+}
 function installSection(){
   return el('section',{class:'setsec'},
     el('h3',{text:'Put it on your phone'}),
@@ -2713,7 +2822,7 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),trashSec,installSection());
+    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),remindersSection(),syncSection(D,D.settings),lockSection(D),aiSection(D,D.settings),backupSection(),trashSec,installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -2813,7 +2922,7 @@ function onErr(e){
 /* ---------- daily text from the person's own EPUB file ----------
    The file is read on this device and kept in this browser's IndexedDB only.
    It is never part of the app's code, sync or backups. */
-const DT={years:{},ready:false,open:false};
+const DT={years:{},ready:false,open:false,uploaded:{}};
 const MONTH_NAMES=['january','february','march','april','may','june','july','august','september','october','november','december'];
 const dtClean=s=>String(s||'').replace(/[​­]/g,'').replace(/\s+/g,' ').trim();
 function idbReq(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
@@ -2926,6 +3035,7 @@ async function importDailyText(file){
   const buf=await file.arrayBuffer();
   const y=parseDailyText(await readZipText(buf,/\.(x?html|opf)$/i));
   try{await dtStore(y);}catch(e){throw {msg:'This browser would not save the daily text. If you are in a private window, open the app normally and try again.'};}
+  if(S.mode==='cloud'&&S.root){try{await S.root.collection('dailytext').doc(y.year).set(y);}catch(e){}}
   DT.years[y.year]=y;
   renderDailyCard();
   paintDtHints();
@@ -3591,6 +3701,7 @@ MIN.load(minMonth());
 MO.load(S.monthSel);
 WIDE.addEventListener('change',()=>paintHabits());
 applyDisplay();
+setupLock();
 if(window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyDisplay);
 setupFormatting();
 setupMonthGlance();
@@ -3637,5 +3748,17 @@ setStatus('Loading your entries...');
   sub('quizzes','updatedAt',onQuizzes);
   sub('progress','updatedAt',onProgress);
   Object.keys(COLL).forEach(k=>sub(COLL[k].cfg.coll,'updatedAt',s=>onColl(COLL[k],s)));
+  /* signed in: daily text books loaded on any device are kept privately in your account */
+  if(S.mode==='cloud') S.root.collection('dailytext').orderBy('year','desc').onSnapshot(snap=>{
+    let added=false;
+    snap.docs.forEach(d=>{
+      const y=d.data();
+      if(y&&y.year&&y.days&&(!DT.years[y.year]||(DT.years[y.year].loadedAt||0)<(y.loadedAt||0))){DT.years[y.year]=y;dtStore(y).catch(()=>{});added=true;}
+    });
+    if(added){renderDailyCard();paintDtHints();paintHabits();}
+    /* books loaded on this device before signing in go up to the account once */
+    const inCloud=new Set(snap.docs.map(d=>d.id));
+    Object.keys(DT.years).filter(y=>!inCloud.has(y)&&!DT.uploaded[y]).forEach(y=>{DT.uploaded[y]=true;S.root.collection('dailytext').doc(y).set(DT.years[y]).catch(()=>{});});
+  },()=>{});
 })();
 })();
