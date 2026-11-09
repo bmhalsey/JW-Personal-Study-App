@@ -25,14 +25,10 @@ function lsGet(k){
   try{return localStorage.getItem(k);}catch(e){return mem.has(k)?mem.get(k):null;}
 }
 function lsSet(k,v){
-  try{localStorage.setItem(k,v);}
-  catch(e){
-    if(e&&(e.name==='QuotaExceededError'||e.code===22)) throw e;
-    mem.set(k,v);
-  }
+  localStorage.setItem(k,v);
 }
 function lsDel(k){
-  try{localStorage.removeItem(k);}catch(e){}
+  localStorage.removeItem(k);
   mem.delete(k);
 }
 function allKeys(){
@@ -79,7 +75,7 @@ function collRef(path){
       };
     },
     orderBy(field,dir){
-      return {limit(n){
+      const query={limit(n){
         return {onSnapshot(next){
           let alive=true;
           const run=()=>{
@@ -101,6 +97,8 @@ function collRef(path){
           return ()=>{alive=false;subs.get(path).delete(run);};
         }};
       }};
+      query.onSnapshot=(next)=>query.limit(Infinity).onSnapshot(next);
+      return query;
     }
   };
 }
@@ -158,26 +156,66 @@ async function fbInit(){
   if(!window.firebase.apps.length) window.firebase.initializeApp(cfg);
   return window.firebase;
 }
-function soft(p){
-  /* Offline, a write waits for the network. Report errors that arrive quickly, then stop waiting. */
-  p.catch(()=>{});
-  return Promise.race([p,new Promise(r=>setTimeout(r,3000))]);
+// A durable outbox survives reloads, including when Firestore persistence is unavailable.
+let outbox={},outboxKey='',cloudRoot=null,cloudBusy=false,cloudError='';
+function readOutbox(){
+  const saved=JSON.parse(localStorage.getItem(outboxKey)||'{}');
+  if(!saved||Array.isArray(saved)||typeof saved!=='object')throw new Error('Cannot read pending changes.');
+  return saved;
+}
+function saveOutbox(){localStorage.setItem(outboxKey,JSON.stringify(outbox));}
+function syncEvent(){window.dispatchEvent(new CustomEvent('dsl-sync',{detail:syncStatus()}));}
+function syncStatus(){return {pending:Object.keys(outbox).length,error:cloudError};}
+async function sendOutbox(){
+  if(cloudBusy||!cloudRoot||!navigator.onLine) return;
+  cloudBusy=true;
+  try{
+    for(const key of Object.keys(outbox)){
+      const item=outbox[key];
+      if(!item)continue;
+      const ref=cloudRoot.collection(item.coll).doc(item.id);
+      try{
+        if(item.data===null) await ref.delete(); else await ref.set(item.data);
+        // Another tab may have saved a newer revision or a different document.
+        const saved=readOutbox();
+        if(saved[key]&&saved[key].revision===item.revision){delete saved[key];}
+        outbox=saved;saveOutbox();
+        cloudError='';syncEvent();
+      }catch(e){cloudError='Sync needs attention. Your changes are saved on this device. Retry or check your sign-in and connection.';syncEvent();break;}
+    }
+  }finally{cloudBusy=false;syncEvent();}
+  if(!cloudError&&Object.keys(outbox).length&&navigator.onLine) setTimeout(sendOutbox,1000);
 }
 function wrapRoot(root){
+  cloudRoot=root;
   return {
     collection(name){
       const c=root.collection(name);
       return {
         doc(id){
           const d=id?c.doc(id):c.doc();
-          return {id:d.id,set:v=>soft(d.set(v)),delete:()=>soft(d.delete())};
+          const write=async data=>{
+            outbox=readOutbox();
+            const key=name+'/'+d.id,previous=outbox[key];
+            outbox[key]={coll:name,id:d.id,data,revision:rand()};
+            try{saveOutbox();}catch(e){if(previous) outbox[key]=previous;else delete outbox[key];throw e;}
+            cloudError='';syncEvent();sendOutbox();
+          };
+          return {id:d.id,set:write,delete:()=>write(null)};
         },
         orderBy:(f,dir)=>c.orderBy(f,dir)
       };
     }
   };
 }
+window.addEventListener('online',()=>{cloudError='';sendOutbox();});
+window.addEventListener('storage',e=>{
+  if(outboxKey&&e.key===outboxKey){
+    try{outbox=readOutbox();syncEvent();sendOutbox();}catch(error){cloudError='Could not read pending changes. Check device storage.';syncEvent();}
+  }
+});
 async function connectCloud(){
+  const cfg=parseFbConfig(settings.firebase);
   const fb=await fbInit();
   const auth=fb.auth();
   const user=await withTimeout(new Promise(res=>{
@@ -187,7 +225,11 @@ async function connectCloud(){
   const fs=fb.firestore();
   try{await fs.enablePersistence({synchronizeTabs:true});}catch(e){}
   state.email=user.email||'';
-  return {root:wrapRoot(fs.doc('users/'+user.uid+'/app/tracker')),mode:'cloud',uid:user.uid};
+  outboxKey='dsl.outbox:'+cfg.projectId+':'+user.uid;
+  try{outbox=readOutbox();}catch(e){throw new Error('Cannot read pending changes.');}
+  const root=wrapRoot(fs.doc('users/'+user.uid+'/app/tracker'));
+  sendOutbox();
+  return {root,mode:'cloud',uid:user.uid};
 }
 async function cloudAuth(email,pw,create){
   const fb=await fbInit();
@@ -301,6 +343,9 @@ window.DSL={
   cloudSignOut:cloudSignOut,
   friendlyAuthError:friendlyAuthError,
   parseFbConfig:parseFbConfig,
+  syncStatus:syncStatus,
+  retrySync:()=>{cloudError='';sendOutbox();},
+  outbox:()=>Object.values(outbox),
   localDump:localDump
 };
 })();

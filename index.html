@@ -377,6 +377,55 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 @media (min-width:1500px){
   .wrap{max-width:1440px}
 }
+
+/* A writing-first study space */
+.study-controls{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.study-home{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:16px}
+.study-home h2{font:700 30px/1.15 var(--font-display);margin:0}
+.study-home p{margin:0}
+.recent-study{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;color:var(--fg);font:inherit;cursor:pointer}
+.recent-study strong{font-size:18px}.recent-study .snip{white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.question-prompt{background:transparent;color:var(--accent);border:0;text-align:left;font:inherit;cursor:pointer;line-height:1.5}
+.backup-reminder{display:flex;align-items:center;gap:12px;border-top:1px solid var(--line);padding-top:16px;font-size:14px;color:var(--muted)}
+.habit-head{flex-wrap:wrap}.habit-title{min-width:0;flex:1}.habit-sum{white-space:normal;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.habit-details{border-top:1px solid var(--line)}.habit-details>.toggle{width:100%;padding:10px 16px;text-align:left;justify-content:space-between;font-size:13px}
+.habit-body{padding-top:12px}
+main{min-width:0}
+main~section[aria-label="Current streaks"]{margin-top:24px}
+.search-dialog,.writing-dialog{box-sizing:border-box;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--fg);padding:28px;width:min(960px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain}
+body:has(dialog[open]){overflow:hidden}
+dialog::backdrop{background:rgba(12,33,33,.58);backdrop-filter:blur(4px)}
+.search-dialog .bar{justify-content:space-between}.search-dialog h2{margin:0}.search-dialog input{width:100%;margin-top:20px}
+.writing-dialog{width:min(960px,calc(100% - 40px))}.writing-dialog.expanded{width:calc(100% - 40px);max-width:1400px}
+.writing-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:-28px;background:var(--bg);padding:12px 0;z-index:4;border-bottom:1px solid var(--line)}
+.writing-top .hint{flex:1;font-size:12px;min-width:90px;margin:0}
+input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:transparent;padding:12px 0;box-shadow:none;width:100%}
+.writing-dialog>input:not(.writing-title){width:100%;background:transparent}
+.writing-toolbar{display:flex;gap:4px;flex-wrap:wrap;padding:12px 0;background:var(--bg)}
+.writing-body{width:100%;min-height:45vh!important;resize:vertical;border:0;background:var(--surface);font:18px/1.8 var(--font-body);padding:24px!important;border-radius:12px;box-sizing:border-box}
+.writing-preview{padding:24px;background:var(--surface);border-radius:12px;min-height:40vh;line-height:1.8}
+.writing-prompts{padding:16px 0}.writing-prompts summary{cursor:pointer;margin-bottom:12px}.writing-prompts .pill{margin:4px}
+.selection-actions{display:flex;gap:14px;flex-wrap:wrap;padding:16px 0}.selection-actions .hint{flex-basis:100%}
+.note-connections{border-top:1px solid var(--line);padding:16px 0;display:flex;gap:12px;flex-direction:column}.note-connections h3{margin:0;font-size:16px}
+.connection-row{display:flex;justify-content:space-between;gap:16px}.connection-row .link{text-align:left}
+.writing-footer{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding-top:20px;border-top:1px solid var(--line)}.writing-footer>.btn:last-child{margin-left:auto}
+.trash-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px;border:1px solid var(--line);border-radius:12px}
+.rt{line-height:1.8;gap:10px}.rt h1,.rt h2,.rt h3,.rt h4{margin:16px 0 4px}.rt blockquote{margin:8px 0;padding:8px 20px;border-left:3px solid var(--accent);background:var(--bg)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+@media(min-width:1000px){
+ .study-controls{grid-column:1;grid-row:2;flex-direction:column;align-items:stretch}.tabs{grid-row:3}
+ main~section[aria-label="Current streaks"]{grid-column:1;grid-row:4;margin-top:0}
+ #view-today{display:flex;flex-direction:column;gap:20px}#view-today>*{width:100%;box-sizing:border-box}
+ #view-today>.datenav{order:-1}#view-today>#studyHome{order:0}#view-today>#habits{width:100%}
+ .study-home{padding:32px}.study-home h2{font-size:36px}#habits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+ .habit{display:flex;flex-direction:column;justify-content:space-between}.habit-head{grid-template-columns:auto minmax(0,1fr);padding:20px}.habit-head>.btn{grid-column:2;justify-self:start}#habits{align-items:stretch}
+}
+@media(max-width:600px){
+ .writing-dialog,.search-dialog{border:0;border-radius:0;width:100%;height:100dvh;max-height:100dvh;max-width:none;margin:0;padding:16px}
+ .writing-dialog.expanded{width:100%;max-width:none}.writing-top{top:-16px;gap:8px}.writing-top .btn{padding:8px 12px;min-height:40px;font-size:14px}
+ input.writing-title{font-size:27px}.writing-body{padding:16px!important;min-height:45dvh!important;font-size:17px}.writing-toolbar{gap:2px}.writing-toolbar .fmtb{padding:0 9px;font-size:13px}
+ .study-home{padding:20px}.study-home h2{font-size:27px}.backup-reminder{align-items:flex-start}.study-controls{justify-content:stretch}.study-controls>*{flex:1}
+}
 </style>
 </head>
 <body>
@@ -418,7 +467,7 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
       </div>
       <div class="banner" id="sunBanner" hidden></div>
       <p class="hint" id="weekHint" hidden></p>
-      <p class="hint" id="firstRun" hidden>Check off what you finished and add notes under Notes. Entries save on this device. Settings has sync, backup and AI help.</p>
+      <p class="hint" id="firstRun" hidden>Write what you want to remember. Your notes save automatically on this device. Find backup and optional sync in Settings.</p>
       <div id="habits"></div>
     </section>
 

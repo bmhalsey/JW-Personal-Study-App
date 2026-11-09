@@ -25,7 +25,7 @@ const HABITS=[
     {prop:'apply',label:'How I can apply it',multi:true},
     {prop:'question',label:'Question to look into next',multi:true}]}
 ];
-const HPROPS=['ref','vtext','gems','summary','note','apply','people','verse','verseWhy','question','help','verseSaved','qSaved'];
+const HPROPS=['title','ref','vtext','gems','summary','note','apply','people','verse','verseWhy','question','help','verseSaved','qSaved'];
 const TEXTPROPS=['ref','vtext','gems','summary','note','apply','people','verse','verseWhy','question','help'];
 
 const WEEK_GOALS=['Complete the assigned reading','Identify what the passage teaches about Jehovah','Study one character, event, or question','Choose one personal application'];
@@ -322,6 +322,8 @@ function richText(text,onToggle){
   const box=el('div',{class:'rt'});
   String(text||'').split('\n').forEach((line,i)=>{
     if(!line.trim()) return;
+    if(/^#{1,6} /.test(line)){const n=line.match(/^(#{1,6}) (.*)$/);box.append(appendInline(el('h'+n[1].length),n[2]));return;}
+    if(line.startsWith('> ')){box.append(appendInline(el('blockquote'),line.slice(2)));return;}
     const m=line.match(LIST_RE);
     if(m){
       const lvl=Math.min(4,Math.floor(m[1].replace(/\t/g,'    ').length/4));
@@ -330,16 +332,16 @@ function richText(text,onToggle){
         const cb=el('input',{type:'checkbox'});
         cb.checked=m[2]==='☑';
         if(onToggle) cb.addEventListener('change',()=>onToggle(i)); else cb.disabled=true;
-        box.append(el('label',{class:'rt-todo',style:pad},cb,el('span',{text:m[3]})));
+        box.append(el('label',{class:'rt-todo',style:pad},cb,appendInline(el('span'),m[3])));
       }else{
         const mk=/^\d/.test(m[2])?m[2]:(lvl?'◦':'•');
-        box.append(el('div',{class:'rt-li',style:pad},el('span',{class:'mk','aria-hidden':'true',text:mk}),el('span',{text:m[3]})));
+        box.append(el('div',{class:'rt-li',style:pad},el('span',{class:'mk','aria-hidden':'true',text:mk}),appendInline(el('span'),m[3])));
       }
       return;
     }
     const t=line.trim();
     if(t.length>=3&&/[A-Z]/.test(t)&&!/[a-z]/.test(t)) box.append(el('h4',{class:'rt-h',text:t}));
-    else box.append(el('p',{text:line}));
+    else box.append(appendInline(el('p'),line));
   });
   return box;
 }
@@ -349,6 +351,8 @@ function normHabit(s){
   s=s||{};
   const o={done:!!s.done};
   HPROPS.forEach(p=>{o[p]=String(s[p]||'');});
+  o.links=validLinks(s.links);
+  o.updatedAt=Number(s.updatedAt)||0;
   return o;
 }
 function normDay(v,date){
@@ -378,6 +382,8 @@ function normMonth(v,id){
 function normGeneric(v,id,props,extra){
   const o={id:id,createdAt:Number(v&&v.createdAt)||0,updatedAt:Number(v&&v.updatedAt)||0};
   props.forEach(p=>{o[p]=String((v&&v[p])||'');});
+  o.deletedAt=Number(v&&v.deletedAt)||0;
+  o.links=validLinks(v&&v.links);
   if(extra) extra(o,v||{});
   return o;
 }
@@ -399,7 +405,9 @@ let writing=false;
 let dayTimer=null;
 
 function setStatus(text,mode){
+  if(text==='Saved'||text==='Up to date') text=savedStatus();
   $('statusText').textContent=text;
+  if($('writingStatus')) $('writingStatus').textContent=text;
   $('status').classList.toggle('err',mode==='err'||mode==='retry');
   $('retry').hidden=mode!=='retry';
 }
@@ -428,9 +436,9 @@ async function pump(){
         return;
       }
     }
-    setStatus('Saved');
   }finally{
     writing=false;
+    if(!pending.size)updateSyncStatus();
   }
 }
 function newId(coll){
@@ -624,7 +632,7 @@ function setupColl(cfg){
   }
   const delBtn=el('button',{type:'button',class:'btn danger'},'Delete '+cfg.singular);
   const confirm=el('div',{class:'confirm',hidden:true},
-    el('p',{text:"Delete this "+cfg.singular+"? This can't be undone."}),
+    el('p',{text:"Delete this "+cfg.singular+"? You can restore it from Trash."}),
     el('div',{class:'bar'},
       el('button',{type:'button',class:'btn danger',onclick:()=>deleteItem(st)},'Delete'),
       el('button',{type:'button',class:'btn ghost',onclick:()=>{confirm.hidden=true;}},'Keep it')));
@@ -652,6 +660,7 @@ function commitColl(st){
 }
 function openItem(st,id,tpl){
   const cfg=st.cfg;
+  commitColl(st);
   if(id){st.draft=clone(st.items[id]);}
   else{
     const now=Date.now();
@@ -662,6 +671,7 @@ function openItem(st,id,tpl){
   st.ui.confirm.hidden=true;
   renderColl(st);
   paintEditor(st,true);
+  if(cfg.key==='notes'){openWriting({kind:'note',st});return;}
   if(!id){const f=document.getElementById('f-'+cfg.key+'-'+cfg.fields[0].prop);if(f) f.focus();}
 }
 function closeItem(st){
@@ -674,8 +684,9 @@ function deleteItem(st){
   if(!st.draft) return;
   const id=st.draft.id;
   clearTimeout(st.timer);st.timer=null;
-  delete st.items[id];
-  enqueue(st.cfg.coll,id,null);
+  const item=clone(st.draft);item.deletedAt=Date.now();item.updatedAt=Date.now();
+  st.items[id]=item;
+  enqueue(st.cfg.coll,id,item);
   st.open=null;st.draft=null;
   renderColl(st);
   renderLibTabs();
@@ -684,6 +695,7 @@ function paintEditor(st,force){
   const d=st.draft;
   if(!d) return;
   const cfg=st.cfg;
+  if(st.ui.connections)renderConnections(st.ui.connections,d,{coll:cfg.coll,id:d.id},()=>touchColl(st));
   cfg.fields.forEach(f=>paintControl(f,'f-'+cfg.key,d[f.prop],force,d));
   if(st.ui.helpBox){st.ui.helpBox.hidden=!d.help;st.ui.helpText.textContent=d.help||'';}
   if(st.ui.readBox){
@@ -727,7 +739,7 @@ function renderColl(st){
   ui.root.classList.toggle('editing',!!st.open);
   ui.editor.hidden=!st.open;
   if(st.open) paintEditor(st,false);
-  const all=Object.values(st.items);
+  const all=Object.values(st.items).filter(i=>!i.deletedAt);
   const fl=cfg.filters?cfg.filters(all):[{id:'all',label:'All',test:()=>true}];
   let active=fl.find(f=>f.id===st.filter);
   if(!active) active=fl.find(f=>f.id==='all')||fl[0];
@@ -746,7 +758,7 @@ function renderColl(st){
     return el('button',{type:'button',class:'row','aria-current':i.id===st.open?'true':null,onclick:()=>openItem(st,i.id)},
       el('h3',{text:r.title}),
       el('div',{class:'meta'},r.chips.map(c=>el('span',{class:'chip',text:c})),el('span',{text:fmtShort(d)})),
-      r.snippet?el('p',{class:'snip',text:r.snippet}):null);
+      r.snippet?el('p',{class:'snip',text:readableSnippet(r.snippet)}):null);
   }));
 }
 function syncColl(st){
@@ -764,15 +776,18 @@ function createItem(key,fields){
   return doc.id;
 }
 function renderLibTabs(){
-  const nq=Object.values(COLL.questions.items).filter(i=>i.status!=='answered').length;
-  const defs=[['questions','Questions'+(nq?' ('+nq+')':'')],['prayers','Prayer'],['verses','Treasury'],['notes','Notebook'],['meetings','Meetings'],['bible','Read-through']];
+  const nq=activeItems(COLL.questions).filter(i=>!i.deletedAt&&i.status!=='answered').length;
+  const defs=[['questions','Questions'+(nq?' ('+nq+')':'')],['prayers','Prayer'],['verses','Treasury'],['notes','Notebook'],['meetings','Meetings'],['bible','Read-through'],['trash','Trash']];
   $('libTabs').replaceChildren(...defs.map(d=>el('button',{type:'button',class:'pill','aria-pressed':String(S.lib===d[0]),onclick:()=>{S.lib=d[0];showLib();}},d[1])));
 }
 function showLib(){
+  Object.values(COLL).forEach(commitColl);
   renderLibTabs();
   Object.keys(COLL).forEach(k=>{COLL[k].ui.root.hidden=k!==S.lib;});
   B.ui.hidden=S.lib!=='bible';
-  if(S.lib==='bible') renderBible(); else renderColl(COLL[S.lib]);
+  if($('trashList'))$('trashList').hidden=S.lib!=='trash';
+  if(S.lib==='trash') renderTrash();
+  else if(S.lib==='bible') renderBible(); else renderColl(COLL[S.lib]);
 }
 
 /* ---------- one-document forms: week and month ---------- */
@@ -872,10 +887,11 @@ function buildHabits(){
     const check=el('button',{type:'button',class:'check',role:'checkbox','aria-checked':'false','aria-label':hb.label+' done',id:'check-'+k,
       onclick:()=>{draft[k].done=!draft[k].done;if(k==='text'&&draft[k].done) fillDtScripture();if(k==='bible'&&draft[k].done){if(!draft.bible.ref.trim()){const pl=todayPlan(draft.date);if(pl&&pl.today) draft.bible.ref=pl.today;}markReadQuiet(draft.bible.ref);}touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
     const sum=el('p',{class:'habit-sum',id:'sum-'+k});
+    const write=el('button',{type:'button',class:'btn ghost',onclick:()=>openWriting({kind:'day',habit:k})},'Write');
     const tg=el('button',{type:'button',class:'toggle',id:'toggle-'+k,'aria-expanded':'false','aria-controls':'body-'+k,
-      onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:'Notes'}),svg(ICON_DOWN));
+      onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:'Study fields'}),svg(ICON_DOWN));
     const mk=f=>mkControl(f,'d-'+k,(prop,val)=>{
-      draft[k][prop]=val;
+      draft[k][prop]=val;draft[k].updatedAt=Date.now();
       const filled=k==='text'&&prop!=='ref'&&prop!=='vtext'&&fillDtScripture();
       touchDay();paintSummary(k);paintActions(k);
       if(filled) paintHabits();
@@ -905,15 +921,17 @@ function buildHabits(){
     }
     const body=el('div',{class:'habit-body',id:'body-'+k,hidden:true},kids);
     box.append(el('section',{class:'habit'},
-      el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{text:hb.label}),sum),tg),body));
+      el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{text:hb.label}),sum,el('small',{class:'hint',id:'edited-'+k})),write),
+      el('div',{class:'habit-details'},tg,body)));
   });
 }
 function paintSummary(k){
   const s=draft[k];
   const n=$('sum-'+k);
-  const t=s.ref||s.verse||s.gems||s.note||s.summary;
-  n.textContent=t?t.slice(0,90):'No notes yet';
+  const t=[s.title||s.ref,cut(readableSnippet(s.note||s.gems||s.summary||s.verse),130)].filter(Boolean).join(' · ');
+  n.textContent=t||'Start with a thought, question, or scripture.';
   n.classList.toggle('none',!t);
+  const edited=$('edited-'+k);edited.textContent=s.updatedAt?'Edited '+new Date(s.updatedAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
 }
 function paintActions(k){
   const s=draft[k];
@@ -958,14 +976,14 @@ function paintHabits(force){
 function saveVerse(){
   const b=draft.bible;
   if(!b.verse.trim()||b.verseSaved) return;
-  b.verseSaved=createItem('verses',{ref:b.verse.trim(),context:b.ref?'From my reading of '+b.ref:'',why:b.verseWhy});
+  b.verseSaved=createItem('verses',{ref:b.verse.trim(),context:b.ref?'From my reading of '+b.ref:'',why:b.verseWhy,links:[{coll:'days',id:draft.date,habit:'bible'}]});
   touchDay();
   paintActions('bible');
 }
 function saveQuestion(k){
   const s=draft[k];
   if(!s.question.trim()||s.qSaved) return;
-  s.qSaved=createItem('questions',{text:s.question.trim(),ref:s.ref||'',fromDate:draft.date});
+  s.qSaved=createItem('questions',{text:s.question.trim(),ref:s.ref||'',fromDate:draft.date,links:[{coll:'days',id:draft.date,habit:k}]});
   touchDay();
   paintActions(k);
 }
@@ -1011,10 +1029,9 @@ function renderToday(){
   renderSunBanner();
   renderDailyCard();
   paintDtHints();
+  renderHome();
 }
-function openExpanded(){
-  expanded=new Set(HABITS.filter(hb=>TEXTPROPS.some(p=>draft[hb.key][p])).map(hb=>hb.key));
-}
+function openExpanded(){expanded=new Set();}
 function goTo(k){
   commitDay();
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
@@ -1138,7 +1155,7 @@ function fillWeek(){
     d.keyRef=withVerse.bible.verse;n++;
     if(!d.keyWhy.trim()&&withVerse.bible.verseWhy.trim()){d.keyWhy=withVerse.bible.verseWhy;n++;}
   }
-  const q=Object.values(COLL.questions.items).filter(i=>i.status==='answered'&&keys.indexOf(i.fromDate)>=0).sort((a,b)=>a.createdAt-b.createdAt)[0];
+  const q=activeItems(COLL.questions).filter(i=>i.status==='answered'&&keys.indexOf(i.fromDate)>=0).sort((a,b)=>a.createdAt-b.createdAt)[0];
   if(q&&!d.qResearched.trim()){d.qResearched=q.text+(q.answer?'\n\nWhat I found: '+q.answer:'');n++;}
   if(n){WK.touch();WK.paint(true);}
   weekFillMsg=n?'Filled '+n+' empty '+(n===1?'field':'fields')+'. Put the rest in your own words.':'Nothing to fill yet. Save a verse or answer a question this week first.';
@@ -1200,10 +1217,10 @@ function renderMonth(){
   const cnt=key=>keys.filter(k=>m[k][key].done).length;
   const all3=keys.filter(k=>doneCount(m[k])===3).length;
   const inM=ts=>!!ts&&monthOf(new Date(ts))===mk;
-  const vs=Object.values(COLL.verses.items).filter(i=>inM(i.createdAt)).length;
-  const qa=Object.values(COLL.questions.items).filter(i=>inM(i.createdAt)).length;
-  const qd=Object.values(COLL.questions.items).filter(i=>i.status==='answered'&&inM(i.answeredAt||i.updatedAt)).length;
-  const nt=Object.values(COLL.notes.items).filter(i=>inM(i.createdAt)).length;
+  const vs=activeItems(COLL.verses).filter(i=>inM(i.createdAt)).length;
+  const qa=activeItems(COLL.questions).filter(i=>inM(i.createdAt)).length;
+  const qd=activeItems(COLL.questions).filter(i=>i.status==='answered'&&inM(i.answeredAt||i.updatedAt)).length;
+  const nt=activeItems(COLL.notes).filter(i=>inM(i.createdAt)).length;
   const qz=Object.values(S.quizzes).filter(q=>String(q.date).slice(0,7)===mk);
   const tot=qz.reduce((a,q)=>a+q.total,0);
   const avg=tot?Math.round(100*qz.reduce((a,q)=>a+q.score,0)/tot)+'%':'None yet';
@@ -1239,9 +1256,9 @@ function quizMaterial(scope){
       if(m[k]){const b=dayNotes(k,m[k]);if(b) blocks.push(b);}
     }
   }else if(scope==='treasury'){
-    blocks=Object.values(COLL.verses.items).sort((a,b)=>b.updatedAt-a.updatedAt).map(v=>'['+cut(v.ref,80)+'] '+cut(v.text,400)+' Category: '+cut(v.category,60)+'. Context: '+cut(v.context,300)+' Why it matters: '+cut(v.why,300)+' When to use it: '+cut(v.when,300));
+    blocks=activeItems(COLL.verses).sort((a,b)=>b.updatedAt-a.updatedAt).map(v=>'['+cut(v.ref,80)+'] '+cut(v.text,400)+' Category: '+cut(v.category,60)+'. Context: '+cut(v.context,300)+' Why it matters: '+cut(v.why,300)+' When to use it: '+cut(v.when,300));
   }else{
-    blocks=Object.values(COLL.questions.items).filter(i=>i.status==='answered'&&i.answer.trim()).sort((a,b)=>b.updatedAt-a.updatedAt).map(i=>'Question: '+cut(i.text,300)+'\nWhat the user found: '+cut(i.answer,800));
+    blocks=activeItems(COLL.questions).filter(i=>i.status==='answered'&&i.answer.trim()).sort((a,b)=>b.updatedAt-a.updatedAt).map(i=>'Question: '+cut(i.text,300)+'\nWhat the user found: '+cut(i.answer,800));
   }
   let out='';
   for(const b of blocks){
@@ -1275,12 +1292,12 @@ function quizCards(scope){
       if(st.note.trim()) cards.push({q:'What did you learn about '+(st.ref||'your personal study topic')+'?',key:st.note,source:src});
     }
   }else if(scope==='treasury'){
-    Object.values(COLL.verses.items).forEach(v=>{
+    activeItems(COLL.verses).forEach(v=>{
       const key=v.why||v.context;
       if(v.ref&&key.trim()) cards.push({q:v.ref+': why does it matter to you?',key:key,source:v.category||''});
     });
   }else{
-    Object.values(COLL.questions.items).forEach(i=>{
+    activeItems(COLL.questions).forEach(i=>{
       if(i.status==='answered'&&i.answer.trim()) cards.push({q:i.text,key:i.answer,source:i.sources||i.ref||''});
     });
   }
@@ -1674,7 +1691,9 @@ function renderBook(box){
 }
 function onProgress(snap){
   const d=snap.docs.find(x=>x.id==='bible');
-  if(d&&!pending.has('progress/bible')&&!writing) S.bible=normBible(d.data());
+  const queued=window.DSL.outbox().find(x=>x.coll==='progress'&&x.id==='bible');
+  if(queued&&queued.data)S.bible=normBible(queued.data);
+  else if(d&&!pending.has('progress/bible')&&!writing) S.bible=normBible(d.data());
   if(S.tab==='library'&&S.lib==='bible') renderBible();
   if(S.tab==='week') renderPlanBox();
 }
@@ -1857,7 +1876,7 @@ const V={phase:'idle',queue:[],i:0,reveal:false,done:0,got:0};
 const INTERVALS=[3,7,14,30,60,120];
 function dueVerses(){
   const t=todayKey();
-  return Object.values(COLL.verses.items).filter(v=>v.ref&&(!v.nextReview||v.nextReview<=t))
+  return activeItems(COLL.verses).filter(v=>!v.deletedAt&&v.ref&&(!v.nextReview||v.nextReview<=t))
     .sort((a,b)=>(a.nextReview||'').localeCompare(b.nextReview||'')||a.createdAt-b.createdAt);
 }
 function gradeVerse(ok){
@@ -1883,7 +1902,7 @@ function gradeVerse(ok){
 function renderVerses(){
   const box=$('revVerses');
   box.replaceChildren();
-  const all=Object.values(COLL.verses.items).filter(v=>v.ref);
+  const all=activeItems(COLL.verses).filter(v=>!v.deletedAt&&v.ref);
   if(V.phase==='run'){
     const v=V.queue[V.i];
     box.append(el('p',{class:'cap',text:'Verse '+(V.i+1)+' of '+V.queue.length}));
@@ -1929,16 +1948,19 @@ function flushAll(){
   Object.keys(COLL).forEach(k=>commitColl(COLL[k]));
 }
 function collectBackup(){
+  if(!allLoaded())throw new Error('Your collection is still loading. Please wait before backing up or restoring.');
   flushAll();
-  const docs=[];
-  Object.values(S.days).forEach(d=>docs.push({coll:'days',id:d.date,data:d}));
-  Object.keys(WK.map).forEach(k=>docs.push({coll:'weeks',id:k,data:WK.map[k]}));
-  Object.keys(MO.map).forEach(k=>docs.push({coll:'months',id:k,data:MO.map[k]}));
-  Object.keys(MIN.map).forEach(k=>docs.push({coll:'ministry',id:k,data:MIN.map[k]}));
-  Object.values(S.quizzes).forEach(q=>docs.push({coll:'quizzes',id:q.id,data:q}));
-  Object.keys(COLL).forEach(k=>Object.values(COLL[k].items).forEach(i=>docs.push({coll:COLL[k].cfg.coll,id:i.id,data:i})));
-  docs.push({coll:'progress',id:'bible',data:S.bible});
-  return {app:'study-log',version:1,exportedAt:new Date().toISOString(),docs:docs};
+  const docs=new Map();
+  const add=(coll,id,data)=>docs.set(coll+'/'+id,{coll,id,data:clone(data)});
+  Object.entries(S.days).forEach(([id,d])=>add('days',id,d));
+  if(draft.updatedAt)add('days',draft.date,draft);
+  [WK,MO,MIN].forEach(st=>{Object.entries(st.map).forEach(([id,d])=>add(st.coll,id,d));if(st.draft&&st.draft.updatedAt)add(st.coll,st.id,st.draft);});
+  Object.values(S.quizzes).forEach(d=>add('quizzes',d.id,d));
+  Object.values(COLL).forEach(st=>{Object.values(st.items).forEach(d=>add(st.cfg.coll,d.id,d));if(st.draft&&st.draft.updatedAt)add(st.cfg.coll,st.draft.id,st.draft);});
+  add('progress','bible',S.bible);
+  window.DSL.outbox().forEach(x=>{if(x.data!==null)add(x.coll,x.id,x.data);else docs.delete(x.coll+'/'+x.id);});
+  pending.forEach(x=>{if(x.payload!==null)add(x.coll,x.id,x.payload);else docs.delete(x.coll+'/'+x.id);});
+  return {app:'study-log',version:1,exportedAt:new Date().toISOString(),docs:[...docs.values()]};
 }
 function importDocs(list){
   const allowed=new Set(['days','weeks','months','ministry','quizzes','progress'].concat(Object.keys(COLL).map(k=>COLL[k].cfg.coll)));
@@ -2051,39 +2073,67 @@ function syncSection(D,set){
   return el('section',{class:'setsec'},kids);
 }
 function backupSection(){
-  const area=el('textarea',{id:'s-backup',rows:5,placeholder:'Backup text appears here. To restore, paste a backup here.',autocomplete:'off',spellcheck:'false'});
-  const msg=el('p',{class:'hint',id:'s-backupmsg'});
-  const confirm=el('div',{class:'confirm',hidden:true},
-    el('p',{text:'Restore will add everything in the backup. Entries with the same date or id are replaced.'}),
-    el('div',{class:'bar'},
-      el('button',{type:'button',class:'btn',id:'s-restoreyes',onclick:()=>{
-        confirm.hidden=true;
-        let obj=null;
-        try{obj=JSON.parse(area.value);}catch(e){}
-        if(!obj||!Array.isArray(obj.docs)){msg.textContent='That is not a backup from this app.';return;}
-        const n=importDocs(obj.docs);
-        msg.textContent='Restoring '+n+' entries...';
-      }},'Restore'),
-      el('button',{type:'button',class:'btn ghost',onclick:()=>{confirm.hidden=true;}},'Cancel')));
-  return el('section',{class:'setsec'},
-    el('h3',{text:'Backup'}),
-    el('p',{class:'hint',text:'A backup is a block of text with all your entries. Save it somewhere safe, like a note to yourself.'}),
-    area,
-    el('div',{class:'actions'},
-      el('button',{type:'button',class:'btn',id:'s-makebackup',onclick:async()=>{
-        const text=JSON.stringify(collectBackup());
-        area.value=text;
-        let copied=false;
-        try{await navigator.clipboard.writeText(text);copied=true;}catch(e){}
-        msg.textContent=copied?'Backup copied. It is also in the box above.':'Backup is in the box above. Select all and copy it.';
-      }},'Create backup'),
-      el('button',{type:'button',class:'btn ghost',id:'s-download',onclick:()=>{
-        const blob=new Blob([JSON.stringify(collectBackup())],{type:'application/json'});
-        const a=el('a',{href:URL.createObjectURL(blob),download:'study-log-backup-'+todayKey()+'.json'});
-        document.body.append(a);a.click();a.remove();
-      }},'Download file'),
-      el('button',{type:'button',class:'btn ghost',id:'s-restore',onclick:()=>{confirm.hidden=false;}},'Restore from the box')),
-    confirm,msg);
+  const area=el('textarea',{id:'s-backup',rows:5,placeholder:'Paste a Study Log backup here to restore it.',autocomplete:'off',spellcheck:'false','aria-label':'Backup JSON'});
+  const msg=el('p',{class:'hint',id:'s-backupmsg',role:'status'});
+  const stamp=el('p',{class:'hint',id:'backupStamp'});
+  const paintStamp=()=>{const last=window.DSL.settings.lastBackup;stamp.textContent=last?'Last backup created: '+new Date(last).toLocaleString():'No backup created on this device yet.';};
+  paintStamp();
+  const run=fn=>{try{fn();}catch(e){msg.textContent=e.message||'Could not complete this action. Your entries have not been replaced.';}};
+  let candidate=null;
+  const confirmBox=el('div',{class:'confirm',hidden:true}),summary=el('p');
+  const validate=text=>{
+    const obj=JSON.parse(text);
+    const allowed=new Set(['days','weeks','months','ministry','quizzes','progress',...Object.values(COLL).map(st=>st.cfg.coll)]);
+    if(!obj||obj.app!=='study-log'||obj.version!==1||!Array.isArray(obj.docs)||!obj.docs.length)throw new Error('Choose a nonempty Study Log backup (version 1).');
+    const ids=new Set();
+    obj.docs.forEach(x=>{
+      if(!x||!allowed.has(x.coll)||typeof x.id!=='string'||!x.id||x.id.includes('/')||['__proto__','constructor','prototype'].includes(x.id)||!x.data||typeof x.data!=='object'||Array.isArray(x.data))throw new Error('This backup contains an invalid entry. Nothing was restored.');
+      const key=x.coll+'/'+x.id;if(ids.has(key))throw new Error('This backup contains duplicate entries.');ids.add(key);
+      if((x.coll==='days'||x.coll==='weeks')&&!/^\d{4}-\d{2}-\d{2}$/.test(x.id))throw new Error('A study date in this backup is invalid.');
+      if((x.coll==='months'||x.coll==='ministry')&&!/^\d{4}-\d{2}$/.test(x.id))throw new Error('A month in this backup is invalid.');
+    });
+    return obj;
+  };
+  const prepare=text=>run(()=>{
+    candidate=null;confirmBox.hidden=true;
+    const obj=validate(text),existing=new Set(collectBackup().docs.map(x=>x.coll+'/'+x.id));
+    candidate=obj;const overwritten=obj.docs.filter(x=>existing.has(x.coll+'/'+x.id)).length;
+    summary.textContent='Restore '+obj.docs.length+' entries? '+overwritten+' existing entries with matching dates or IDs will be replaced. A recovery copy of your current notes will be kept on this device first.';
+    confirmBox.hidden=false;
+  });
+  const finishRestore=obj=>{
+    // Never overwrite entries unless a complete pre-restore recovery copy can be retained.
+    const before=collectBackup();
+    localStorage.setItem('dsl.recovery.v1',JSON.stringify(before));
+    const timestamps=new Map(before.docs.map(x=>[x.coll+'/'+x.id,Number(x.data.updatedAt)||0]));
+    const docs=obj.docs.map(x=>({...x,data:{...x.data,updatedAt:Math.max(Date.now(),(timestamps.get(x.coll+'/'+x.id)||0)+1)}}));
+    const n=importDocs(docs);candidate=null;confirmBox.hidden=true;
+    msg.textContent=n+' entries queued for restore. '+savedStatus();
+  };
+  confirmBox.append(summary,el('div',{class:'actions'},
+    el('button',{type:'button',class:'btn',id:'s-restoreyes',onclick:()=>run(()=>{if(candidate)finishRestore(candidate);})},'Restore entries'),
+    el('button',{type:'button',class:'btn ghost',onclick:()=>{candidate=null;confirmBox.hidden=true;}},'Cancel')));
+  const file=el('input',{type:'file',accept:'.json,application/json',id:'backupFile','aria-label':'Choose backup file'});
+  file.onchange=async()=>{try{if(file.files[0])prepare(await file.files[0].text());}catch(e){msg.textContent='Could not read that backup file.';}};
+  const backup=(copy)=>run(()=>{
+    const text=JSON.stringify(collectBackup());
+    if(copy){area.value=text;msg.textContent='Backup created in the box. Copy it and keep it somewhere safe.';}
+    else{downloadText(text,'study-log-backup-'+todayKey()+'.json','application/json');msg.textContent='Backup download started. Keep the file somewhere safe.';}
+    recordBackup();paintStamp();
+  });
+  return el('section',{class:'setsec',id:'backupSection'},el('h3',{text:'Keep your notes safe'}),stamp,
+    el('p',{class:'hint',text:'Download a backup weekly and keep a copy outside this browser. Sync is helpful, but it does not replace a backup. Daily text EPUB files and device settings are separate.'}),
+    el('div',{class:'actions'},el('button',{type:'button',class:'btn',id:'s-download',onclick:()=>backup(false)},'Download backup'),
+      el('button',{type:'button',class:'btn ghost',id:'s-makebackup',onclick:()=>backup(true)},'Create backup text')),
+    el('h4',{text:'Read your notes anywhere'}),
+    el('div',{class:'actions'},el('button',{type:'button',class:'btn ghost',onclick:()=>run(()=>downloadText(exportMarkdown(),'study-log-'+todayKey()+'.md','text/markdown'))},'Export Markdown'),
+      el('button',{type:'button',class:'btn ghost',onclick:()=>run(printNotes)},'Print / Save PDF')),
+    el('details',{},el('summary',{text:'Restore a backup'}),el('p',{class:'hint',text:'Choose a backup file or paste backup text. You can review the number of replacements before restoring.'}),
+      file,area,el('button',{type:'button',class:'btn ghost',id:'s-restore',onclick:()=>prepare(area.value)},'Review restore'),confirmBox,
+      el('button',{type:'button',class:'link',onclick:()=>run(()=>{
+        const saved=localStorage.getItem('dsl.recovery.v1');if(!saved)throw new Error('No pre-restore recovery copy exists on this device.');
+        prepare(saved);
+      })},'Recover notes from before the last restore')),msg);
 }
 function dailyTextSection(){
   const msg=el('p',{class:'hint',id:'s-dtmsg',role:'status'});
@@ -2152,7 +2202,7 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
+    preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -2164,6 +2214,8 @@ function setTab(t){
   S.tab=t;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.tab===t)));
   ['today','week','library','review','settings'].forEach(x=>{$('view-'+x).hidden=x!==t;});
+  flushAll();
+  if(t==='today') renderHome();
   if(t==='week'){WK.load(S.weekSel);MIN.load(minMonth());renderWeek();}
   if(t==='library') showLib();
   if(t==='review') showRev();
@@ -2186,11 +2238,11 @@ function showRev(){
 function onDays(snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=normDay(v,d.id);});
-  S.days=m;
+  S.days=overlayOutbox('days',m,normDay);
   S.daysLoaded=true;
   if(!snap.metadata.fromCache){
     S.fresh=true;
-    if(!writing&&dayTimer===null&&pending.size===0) setStatus('Up to date');
+    if(!writing&&dayTimer===null&&pending.size===0) updateSyncStatus();
   }
   syncDraft();
   renderToday();
@@ -2202,7 +2254,7 @@ function onDays(snap){
 function onWeeks(snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=normWeek(v,d.id);});
-  WK.map=m;
+  WK.map=overlayOutbox('weeks',m,normWeek);
   WK.sync();
   renderToday();
   if(S.tab==='week') renderWeek();
@@ -2210,25 +2262,26 @@ function onWeeks(snap){
 function onMonths(snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=normMonth(v,d.id);});
-  MO.map=m;
+  MO.map=overlayOutbox('months',m,normMonth);
   MO.sync();
 }
 function onMinistry(snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=normMin(v,d.id);});
-  MIN.map=m;
+  MIN.map=overlayOutbox('ministry',m,normMin);
   MIN.sync();
 }
 function onQuizzes(snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=normQuiz(v,d.id);});
-  S.quizzes=m;
+  S.quizzes=overlayOutbox('quizzes',m,normQuiz);
   if(S.tab==='review'&&S.rev==='quiz'&&Q.phase==='setup'&&!Q.busy) renderQuiz();
   if(S.tab==='review'&&S.rev==='month') renderMonth();
 }
 function onColl(st,snap){
   const m={};
   snap.docs.forEach(d=>{const v=d.data();if(v) m[d.id]=st.cfg.norm(v,d.id);});
+  window.DSL.outbox().filter(it=>it.coll===st.cfg.coll&&it.data).forEach(it=>{m[it.id]=st.cfg.norm(it.data,it.id);});
   if(st.draft&&(st.timer!==null||pending.has(st.cfg.coll+'/'+st.draft.id))) m[st.draft.id]=clone(st.draft);
   pending.forEach(it=>{
     if(it.coll!==st.cfg.coll) return;
@@ -2240,6 +2293,7 @@ function onColl(st,snap){
   if(S.tab==='library'&&S.lib===st.cfg.key) renderColl(st);
   renderLibTabs();
   if(S.tab==='review'&&S.rev==='month') renderMonth();
+  if(S.tab==='library'&&S.lib==='trash') renderTrash();
 }
 function onErr(e){
   setStatus(e&&e.code==='revoked'?'Access to your entries ended. Reopen the page to continue.':'Could not load your saved entries.','err');
@@ -2272,6 +2326,7 @@ async function dtLoadAll(){
   DT.ready=true;
   renderDailyCard();
   paintDtHints();
+  renderHome();
 }
 async function dtStore(y,remove){
   const db=await dtDb();
@@ -2362,6 +2417,7 @@ async function importDailyText(file){
   DT.years[y.year]=y;
   renderDailyCard();
   paintDtHints();
+  renderHome();
   return y;
 }
 /* The same link JW Library makes when you share a daily text, opened straight in the app.
@@ -2560,6 +2616,318 @@ function setupFormatting(){
   });
 }
 
+/* ---------- writing, connections, recovery and discovery ---------- */
+const loadedCollections=new Set();
+const activeItems=st=>Object.values(st.items).filter(i=>!i.deletedAt);
+function validLinks(v){
+  return Array.isArray(v)?v.filter(x=>x&&typeof x.coll==='string'&&typeof x.id==='string'&&
+    ['days','notes','questions','verses','prayers','meetings','weeks','months','ministry','quizzes'].includes(x.coll))
+    .map(x=>({coll:x.coll,id:x.id,...(['text','bible','study'].includes(x.habit)?{habit:x.habit}:{})})):[];
+}
+function sameLink(a,b){return a.coll===b.coll&&a.id===b.id&&(a.habit||'')===(b.habit||'');}
+function savedStatus(){
+  const state=window.DSL.syncStatus();
+  if(S.mode!=='cloud') return 'Saved on this device';
+  if(state.error) return state.error;
+  return state.pending?'Saved on this device · Waiting to sync':'Synced';
+}
+function updateSyncStatus(){
+  if(!writing&&!pending.size&&dayTimer===null&&[WK,MO,MIN].every(x=>x.timer===null)&&!Object.values(COLL).some(x=>x.timer!==null)) setStatus(savedStatus(),window.DSL.syncStatus().error?'retry':undefined);
+}
+function overlayOutbox(coll,map,norm){
+  window.DSL.outbox().filter(x=>x.coll===coll).forEach(x=>{
+    if(x.data===null) delete map[x.id];else map[x.id]=norm?norm(x.data,x.id):x.data;
+  });
+  return map;
+}
+function downloadText(text,name,type){
+  const url=URL.createObjectURL(new Blob([text],{type:type||'text/plain;charset=utf-8'}));
+  const a=el('a',{href:url,download:name});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function recordBackup(){
+  if(!window.DSL.saveSettings({lastBackup:Date.now()})) throw new Error('Could not save the backup date. Check device storage.');
+  renderHome();
+}
+function allLoaded(){return loadedCollections.size===6+Object.keys(COLL).length;}
+function preferencesSection(){
+  const section=el('section',{class:'setsec'},el('h3',{text:'Your study space'}));
+  [['showStreaks','Show streak counters'],['showProgress','Show daily completion tracking'],['backupReminders','Remind me to back up weekly']].forEach(([key,label])=>{
+    const input=el('input',{type:'checkbox',id:'pref-'+key});input.checked=key==='backupReminders'?window.DSL.settings[key]!==false:!!window.DSL.settings[key];
+    input.onchange=()=>{if(!window.DSL.saveSettings({[key]:input.checked})) setStatus('Could not save this preference.','err');applyPreferences();};
+    section.append(el('div',{class:'checkrow'},input,el('label',{for:input.id,text:label})));
+  });
+  section.append(el('p',{class:'hint',text:'Write freely. Study prompts and completion tracking are there when you want them.'}));
+  return section;
+}
+function applyPreferences(){
+  document.querySelector('[aria-label="Current streaks"]').hidden=!window.DSL.settings.showStreaks;
+  document.querySelector('.progress').hidden=!window.DSL.settings.showProgress;
+  renderHome();
+}
+function renderHome(){
+  const box=$('studyHome');if(!box)return;
+  const recent=activeItems(COLL.notes).sort((a,b)=>b.updatedAt-a.updatedAt)[0];
+  const due=dueVerses().length;
+  const question=activeItems(COLL.questions).filter(x=>x.status!=='answered').sort((a,b)=>a.createdAt-b.createdAt)[0];
+  const last=Number(window.DSL.settings.lastBackup)||0;
+  const overdue=window.DSL.settings.backupReminders!==false&&(!last||Date.now()-last>7*86400000);
+  box.replaceChildren(...[
+    el('p',{class:'cap',text:'A little time to reflect'}),
+    el('h2',{text:'What stayed with you?'}),
+    el('p',{class:'hint',text:'Make space for a thought, a question, or something you want to put into practice.'}),
+    el('div',{class:'actions'},
+      el('button',{type:'button',class:'btn',onclick:()=>openWriting({kind:'day',habit:'study'})},draft.study.note?'Continue studying':'Start studying'),
+      el('button',{type:'button',class:'btn ghost',onclick:quickNote},'Write a note')),
+    recent?el('button',{type:'button',class:'recent-study',onclick:()=>{setTab('library');S.lib='notes';showLib();openItem(COLL.notes,recent.id);}},
+      el('span',{class:'cap',text:'Continue in your notebook'}),el('strong',{text:recent.title||'Untitled note'}),
+      el('span',{class:'snip',text:cut(readableSnippet(recent.body),140)}),el('span',{class:'hint',text:'Edited '+new Date(recent.updatedAt).toLocaleDateString()})):null,
+    due?el('button',{type:'button',class:'link',onclick:()=>{S.rev='verses';setTab('review');}},due+' scripture'+(due===1?'':'s')+' ready to revisit'):null,
+    question?el('button',{type:'button',class:'question-prompt',onclick:()=>openTarget({coll:'questions',id:question.id})},'A question to return to: '+cut(question.text,140)):null,
+    overdue?el('div',{class:'backup-reminder'},el('span',{text:last?'It has been a week since your last backup.':'Keep a copy of your study notes somewhere safe.'}),
+      el('button',{type:'button',class:'link',onclick:()=>{setTab('settings');$('backupSection').scrollIntoView({block:'center'});}},'Back up notes')):null].filter(Boolean));
+}
+function quickNote(){
+  flushAll();setTab('library');S.lib='notes';showLib();openItem(COLL.notes,null,{id:'blank',title:'',body:''});
+}
+function sourceLabel(src){
+  if(src.coll==='days') return (HABITS.find(h=>h.key===src.habit)||{label:'Study'}).label+' · '+src.id;
+  const st=Object.values(COLL).find(st=>st.cfg.coll===src.coll);
+  const item=st&&st.items[src.id];
+  return item?(st.cfg.row(item).title||st.cfg.singular):src.coll+' · '+src.id;
+}
+function openTarget(src){
+  if(writingDialog&&writingDialog.open) writingDialog.close();
+  if(src.coll==='days'){openDay(src.id);if(src.habit)openWriting({kind:'day',habit:src.habit});return;}
+  const st=Object.values(COLL).find(x=>x.cfg.coll===src.coll);
+  if(st){if(!st.items[src.id]||st.items[src.id].deletedAt){setStatus('This entry is in Trash or is no longer available.');return;}
+    S.lib=st.cfg.key;setTab('library');openItem(st,src.id);return;}
+  if(src.coll==='weeks'){S.weekSel=src.id;setTab('week');return;}
+  if(src.coll==='months'){S.monthSel=src.id;S.rev='month';setTab('review');return;}
+  if(src.coll==='ministry'){S.weekSel=mondayOf(src.id+'-01');setTab('week');return;}
+  if(src.coll==='quizzes'){const q=S.quizzes[src.id];if(q){S.rev='month';S.monthSel=q.date.slice(0,7);setTab('review');}}
+}
+function searchRecords(){
+  const records=[];
+  Object.values(eff()).forEach(day=>HABITS.forEach(h=>{
+    const item=day[h.key];if(!hasContent(item))return;
+    records.push({src:{coll:'days',id:day.date,habit:h.key},title:item.title||item.ref||h.label,
+      label:h.label+' · '+day.date,text:TEXTPROPS.map(p=>item[p]).join('\n'),updatedAt:day.updatedAt});
+  }));
+  Object.values(COLL).forEach(st=>activeItems(st).forEach(item=>records.push({src:{coll:st.cfg.coll,id:item.id},title:st.cfg.row(item).title,
+    label:st.cfg.plural,text:st.cfg.search(item),updatedAt:item.updatedAt})));
+  [[WK,'Week'],[MO,'Month'],[MIN,'Ministry']].forEach(([st,label])=>{
+    const map={...st.map};if(st.draft&&st.draft.updatedAt)map[st.id]=st.draft;
+    Object.entries(map).forEach(([id,item])=>records.push({src:{coll:st.coll,id},title:label+' · '+id,label,text:Object.values(item).filter(x=>typeof x==='string').join('\n'),updatedAt:item.updatedAt}));
+  });
+  Object.values(S.quizzes).forEach(q=>records.push({src:{coll:'quizzes',id:q.id},title:'Quiz · '+q.date,label:'Quiz',text:JSON.stringify(q.results),updatedAt:q.updatedAt}));
+  return records.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+}
+let activeSearchRender=null;
+function openSearch(){
+  flushAll();
+  const dialog=el('dialog',{class:'search-dialog','aria-label':'Search all your study notes'});
+  const input=el('input',{type:'search',placeholder:'Search scriptures, thoughts, questions…','aria-label':'Search everything'});
+  const rows=el('div',{class:'rows'}),count=el('p',{class:'hint',role:'status'});
+  const render=()=>{
+    const q=input.value.trim().toLocaleLowerCase();
+    const found=searchRecords().filter(r=>!q||(r.title+' '+r.label+' '+r.text).toLocaleLowerCase().includes(q));
+    count.textContent=!allLoaded()?'Loading your collection…':found.length+' matching entries';
+    rows.replaceChildren(...found.map(r=>el('button',{type:'button',class:'row',onclick:()=>{dialog.close();openTarget(r.src);}},
+      el('p',{class:'cap',text:r.label}),el('h3',{text:r.title||'Untitled'}),el('p',{class:'snip',text:searchSnippet(r.text,q)}))));
+    if(!found.length) rows.append(el('p',{class:'empty-note',text:q?'No matching notes. Try another word or scripture.':'Your notes will appear here as you study.'}));
+  };
+  input.oninput=render;activeSearchRender=render;
+  dialog.append(el('div',{class:'bar'},el('h2',{text:'Find a thought'}),el('button',{type:'button',class:'btn ghost',onclick:()=>dialog.close()},'Close')),input,count,rows);
+  dialog.addEventListener('close',()=>{if(activeSearchRender===render)activeSearchRender=null;dialog.remove();});document.body.append(dialog);dialog.showModal();render();input.focus();
+}
+function readableSnippet(text){return String(text||'').replace(/^#{1,6}\s+/gm,'').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/^> /gm,'');}
+function searchSnippet(text,q){
+  const clean=readableSnippet(text).replace(/\s+/g,' '),i=q?clean.toLocaleLowerCase().indexOf(q):0;
+  return (i>45?'…':'')+clean.slice(Math.max(0,i-45),Math.max(0,i-45)+200);
+}
+function renderTrash(){
+  let box=$('trashList');if(!box){box=el('section',{id:'trashList',class:'view'});$('libBody').append(box);}
+  box.hidden=S.lib!=='trash';
+  const deleted=Object.values(COLL).flatMap(st=>Object.values(st.items).filter(x=>x.deletedAt).map(item=>({st,item}))).sort((a,b)=>b.item.deletedAt-a.item.deletedAt);
+  box.replaceChildren(...[el('h2',{text:'Trash'}),el('p',{class:'hint',text:'Deleted entries stay here until you restore them. They are included in backups.'}),
+    ...deleted.map(({st,item})=>el('div',{class:'trash-row'},
+      el('div',{},el('strong',{text:st.cfg.row(item).title||'Untitled'}),el('p',{class:'hint',text:st.cfg.plural+' · Deleted '+new Date(item.deletedAt).toLocaleDateString()})),
+      el('button',{type:'button',class:'btn ghost',onclick:()=>{
+        const restored={...item,deletedAt:0,updatedAt:Date.now()};st.items[item.id]=restored;enqueue(st.cfg.coll,item.id,restored);renderTrash();renderLibTabs();
+      }},'Restore'))),!deleted.length?el('p',{class:'empty-note',text:'Nothing in Trash.'}):null].filter(Boolean));
+}
+let writingDialog=null,writingSession=null;
+function openWriting(session){
+  if(writingDialog&&writingDialog.open)writingDialog.close();
+  writingSession=session;
+  const isDay=session.kind==='day',st=session.st;
+  const item=()=>isDay?draft[session.habit]:st.draft;
+  const bodyKey=isDay?'note':'body';
+  const src=isDay?{coll:'days',id:draft.date,habit:session.habit}:{coll:st.cfg.coll,id:st.draft.id};
+  const touch=()=>{if(isDay){item().updatedAt=Date.now();touchDay();paintSummary(session.habit);}else touchColl(st);};
+  const dialog=el('dialog',{class:'writing-dialog','aria-label':'Study note editor'});writingDialog=dialog;
+  const title=el('input',{class:'writing-title',type:'text','aria-label':'Study title',placeholder:'Give this study a title',value:item().title||''});
+  const reference=el('input',{type:'text','aria-label':isDay?'Scripture or topic':'Topic',placeholder:isDay?'Scripture reference or topic':'Topic, Bible book, or character',value:(isDay?item().ref:item().topic)||''});
+  const reflinks=el('div',{class:'reflinks'});
+  refLink(reflinks,reference.value);
+  const ta=el('textarea',{id:'writingBody',class:'writing-body',rows:16,'aria-label':'Study notes',placeholder:'Start writing. A thought, a question, a connection…'});ta.value=item()[bodyKey]||'';
+  const preview=el('article',{class:'writing-preview',hidden:true});
+  const status=el('p',{id:'writingStatus',class:'hint',role:'status',text:$('statusText').textContent});
+  const meta=el('p',{class:'hint',text:isDay?HABITS.find(x=>x.key===session.habit).label+' · '+draft.date:'Notebook · '+new Date(item().updatedAt||Date.now()).toLocaleDateString()});
+  const edit=(key,val)=>{item()[key]=val;touch();};
+  title.oninput=()=>edit('title',title.value);reference.oninput=()=>{edit(isDay?'ref':'topic',reference.value);refLink(reflinks,reference.value);};
+  ta.oninput=()=>{edit(bodyKey,ta.value);wordCount.textContent=ta.value.trim()?ta.value.trim().split(/\s+/).length+' words':'Your space to think';};
+  const wordCount=el('span',{class:'hint',text:ta.value.trim()?ta.value.trim().split(/\s+/).length+' words':'Your space to think'});
+  const toolbar=el('div',{class:'writing-toolbar',role:'toolbar','aria-label':'Format study notes'});
+  const format=(label,fn)=>toolbar.append(el('button',{type:'button',class:'fmtb',onmousedown:e=>e.preventDefault(),onclick:()=>{if(!preview.hidden){readBtn.click();}fn();ta.focus();}},label));
+  format('Bold',()=>wrapSelection(ta,'**','**','important thought'));
+  format('Heading',()=>editLines(ta,ls=>ls.map(l=>l.startsWith('## ')?l.slice(3):'## '+l)));
+  format('Bullets',()=>editLines(ta,FMT_OPS.bullets));
+  format('Numbers',()=>editLines(ta,FMT_OPS.numbers));
+  format('Checklist',()=>editLines(ta,FMT_OPS.todo));
+  format('Quote',()=>editLines(ta,ls=>ls.map(l=>l.startsWith('> ')?l.slice(2):'> '+l)));
+  format('Link',()=>{
+    const url=prompt('Paste a web link (https://…)');if(!url)return;
+    if(!safeURL(url)){message.textContent='Use an http or https web address.';return;}
+    wrapSelection(ta,'[',']('+url+')','link text');
+  });
+  const readBtn=el('button',{type:'button',class:'btn ghost',onclick:()=>{
+    const read=preview.hidden;preview.hidden=!read;ta.hidden=read;toolbar.hidden=read;prompts.hidden=read;
+    readBtn.textContent=read?'Edit note':'Read note';
+    preview.replaceChildren(...[el('h1',{text:title.value||reference.value||'Study note'}),el('p',{class:'hint',text:meta.textContent}),reference.value?el('p',{text:reference.value}):null,richText(ta.value)].filter(Boolean));
+  }},'Read note');
+  const prompts=el('details',{class:'writing-prompts'},el('summary',{text:'A little inspiration, if you need it'}));
+  ['What did I notice?','What does this teach me about Jehovah?','How could I apply it?','A question to explore'].forEach(text=>prompts.append(el('button',{type:'button',class:'pill',onclick:()=>{
+    const end=ta.value.length;setText(ta,end,end,(ta.value?'\n\n':'')+'## '+text+'\n',end+(ta.value?2:0)+text.length+4,false);ta.focus();
+  }},text)));
+  const message=el('p',{class:'hint',role:'status'});
+  const links=el('div',{class:'note-connections'});
+  const paintLinks=()=>renderConnections(links,item(),src,()=>touch());
+  const extract=(kind)=>{
+    const selected=ta.value.slice(ta.selectionStart,ta.selectionEnd).trim();
+    if(!selected){message.textContent='Select the sentence or paragraph you want to save first.';return;}
+    if(kind==='application'){
+      if(isDay)edit('apply',selected);
+      else{if(!ta.value.includes('## My application\n'+selected)){const end=ta.value.length;setText(ta,end,end,'\n\n## My application\n'+selected,end+selected.length+20,false);}}
+      message.textContent='Application marked in this study.';return;
+    }
+    if(kind==='verse'){
+      const ref=prompt('Which scripture is this about?',isDay?reference.value:'');if(!ref)return;
+      const id=createItem('verses',{ref,text:selected,why:'',links:[src]});
+      addConnection(item(),{coll:'verses',id});touch();message.textContent='Saved in Scripture Treasury with a link to this study.';
+    }else{
+      const id=createItem('questions',{text:selected,ref:isDay?reference.value:'',links:[src]});
+      addConnection(item(),{coll:'questions',id});touch();message.textContent='Saved in Questions with a link to this study.';
+    }
+    paintLinks();
+  };
+  const selectionActions=el('div',{class:'selection-actions'},el('span',{class:'hint',text:'With selected text:'}),
+    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('question')},'Save question'),
+    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('verse')},'Save scripture'),
+    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('application')},'Mark application'));
+  const saveNotebook=()=>{
+    const id=createItem('notes',{title:title.value||reference.value||'Study · '+draft.date,topic:reference.value,body:ta.value,links:[src]});
+    addConnection(item(),{coll:'notes',id});touch();paintLinks();message.textContent='Saved in Notebook and connected to this study.';
+  };
+  const close=el('button',{type:'button',class:'btn',onclick:()=>dialog.close()},'Done');
+  dialog.append(el('div',{class:'writing-top'},el('button',{type:'button',class:'link',onclick:()=>dialog.close()},'← Back'),status,
+    el('button',{type:'button',class:'link',onclick:()=>{dialog.classList.toggle('expanded');}},'Expand'),readBtn),
+    meta,title,reference,reflinks,toolbar,ta,preview,el('div',{class:'bar'},wordCount),prompts,selectionActions,
+    isDay?el('button',{type:'button',class:'btn ghost',onclick:saveNotebook},'Save a copy to Notebook'):null,
+    links,message,el('div',{class:'writing-footer'},
+      el('button',{type:'button',class:'link',onclick:()=>downloadText('# '+(title.value||'Study note')+'\n\n'+meta.textContent+'\n\n'+reference.value+'\n\n'+ta.value,'study-note.md','text/markdown')},'Export note'),
+      !isDay?el('button',{type:'button',class:'link danger',onclick:()=>{if(confirm('Move this note to Trash? You can restore it later.')){deleteItem(st);dialog.close();}}},'Move to Trash'):null,close));
+  document.body.append(dialog);dialog.showModal();paintLinks();
+  dialog.addEventListener('close',()=>{
+    flushAll();if(isDay){paintHabits(true);renderToday();}else{
+      if(writingDialog===dialog&&st.draft&&st.draft.id===src.id){st.open=null;st.draft=null;}
+      renderColl(st);renderHome();
+    }
+    dialog.remove();if(writingDialog===dialog){writingDialog=null;writingSession=null;}
+  });
+  ta.focus();
+}
+function wrapSelection(ta,before,after,fallback){
+  const a=ta.selectionStart,b=ta.selectionEnd,text=ta.value.slice(a,b)||fallback;
+  setText(ta,a,b,before+text+after,a+before.length+text.length,false);
+}
+function safeURL(url){try{return ['http:','https:'].includes(new URL(url).protocol);}catch(e){return false;}}
+function appendInline(parent,text){
+  const re=/\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)]+)\)/g;let pos=0,m;
+  while((m=re.exec(text))){
+    parent.append(document.createTextNode(text.slice(pos,m.index)));
+    if(m[1])parent.append(el('strong',{text:m[1]}));
+    else if(safeURL(m[3]))parent.append(el('a',{href:m[3],target:'_blank',rel:'noopener noreferrer',text:m[2]}));
+    else parent.append(document.createTextNode(m[0]));pos=re.lastIndex;
+  }
+  parent.append(document.createTextNode(text.slice(pos)));return parent;
+}
+function addConnection(item,src){item.links=validLinks(item.links);if(!item.links.some(x=>sameLink(x,src)))item.links.push(src);}
+function renderConnections(box,item,src,touch){
+  const links=validLinks(item.links);
+  const backlinks=searchRecords().filter(r=>{
+    if(sameLink(r.src,src))return false;
+    const st=Object.values(COLL).find(st=>st.cfg.coll===r.src.coll);
+    const d=st?st.items[r.src.id]:r.src.coll==='days'&&eff()[r.src.id]&&eff()[r.src.id][r.src.habit];
+    return d&&validLinks(d.links).some(x=>sameLink(x,src))&&!links.some(x=>sameLink(x,r.src));
+  });
+  box.replaceChildren(el('h3',{text:'Connected thoughts'}),
+    ...links.map(link=>el('div',{class:'connection-row'},el('button',{type:'button',class:'link',onclick:()=>openTarget(link)},sourceLabel(link)),
+      el('button',{type:'button',class:'link',onclick:()=>{item.links=links.filter(x=>!sameLink(x,link));touch();renderConnections(box,item,src,touch);},'aria-label':'Remove connection to '+sourceLabel(link)},'Remove'))),
+    ...backlinks.map(r=>el('button',{type:'button',class:'link',onclick:()=>openTarget(r.src)},'Linked from '+r.title)),
+    el('button',{type:'button',class:'btn ghost',onclick:()=>pickConnection(src,link=>{addConnection(item,link);touch();renderConnections(box,item,src,touch);})},'Connect another note'));
+}
+function pickConnection(src,onPick){
+  const dialog=el('dialog',{class:'search-dialog','aria-label':'Connect a note'}),rows=el('div',{class:'rows'});
+  const input=el('input',{type:'search','aria-label':'Find a note to connect',placeholder:'Find a topic, character, question…'});
+  const paint=()=>{
+    const q=input.value.toLowerCase();rows.replaceChildren(...searchRecords().filter(r=>!sameLink(r.src,src)&&(r.title+' '+r.text).toLowerCase().includes(q)).map(r=>
+      el('button',{type:'button',class:'row',onclick:()=>{onPick(r.src);dialog.close();}},el('p',{class:'cap',text:r.label}),el('strong',{text:r.title}))));
+    if(!rows.childElementCount)rows.append(el('p',{class:'hint',text:'No other matching notes yet.'}));
+  };
+  dialog.append(el('div',{class:'bar'},el('h2',{text:'Connect a thought'}),el('button',{type:'button',class:'btn ghost',onclick:()=>dialog.close()},'Cancel')),input,rows);
+  dialog.onclose=()=>dialog.remove();input.oninput=paint;document.body.append(dialog);dialog.showModal();paint();input.focus();
+}
+function exportMarkdown(){
+  const backup=collectBackup();
+  return '# My Study Log\n\nExported '+new Date().toLocaleString()+'\n\n'+backup.docs.map(({coll,id,data})=>{
+    const lines=['## '+coll+' · '+id+(data.deletedAt?' (Trash)':'')];
+    const write=(obj,level)=>Object.entries(obj).forEach(([k,v])=>{
+      if(['id','createdAt','updatedAt','deletedAt','links'].includes(k)||v===''||v===null||v===false)return;
+      if(typeof v==='object'&&!Array.isArray(v)){lines.push('\n'+'#'.repeat(Math.min(level,6))+' '+k);write(v,level+1);}
+      else lines.push('\n**'+k+'**\n\n'+(Array.isArray(v)?JSON.stringify(v,null,2):String(v)));
+    });
+    write(data,3);
+    if(validLinks(data.links).length)lines.push('\nConnected to: '+data.links.map(sourceLabel).join('; '));
+    return lines.join('\n');
+  }).join('\n\n---\n\n');
+}
+function printNotes(){
+  const markdown=exportMarkdown();
+  const win=window.open('','_blank');if(!win){setStatus('Allow popups to open the printable document.','err');return;}
+  win.document.title='My Study Log';
+  const style=win.document.createElement('style');style.textContent='body{font:17px/1.65 Georgia,serif;max-width:760px;margin:40px auto;padding:20px;color:#172c2b}h1,h2,h3{font-family:system-ui;break-after:avoid}p{white-space:pre-wrap}a{color:inherit}.rt-li{padding-left:24px}.mk{margin-right:12px}blockquote{border-left:3px solid #aaa;padding-left:18px}button{font:inherit;padding:10px 18px}@media print{button{display:none}body{margin:0;max-width:none}}';
+  win.document.head.append(style);
+  const button=win.document.createElement('button');button.textContent='Print / Save as PDF';button.onclick=()=>win.print();
+  win.document.body.append(button,win.document.importNode(richText(markdown),true));
+}
+function initStudySpace(){
+  const controls=el('div',{class:'study-controls'},
+    el('button',{type:'button',class:'btn ghost',onclick:openSearch},'Search everything'),
+    el('button',{type:'button',class:'btn',onclick:quickNote},'+ Quick note'));
+  document.querySelector('main').before(controls);
+  $('view-today').querySelector('.datenav').after(el('section',{id:'studyHome',class:'study-home'}));
+  const streaks=document.querySelector('[aria-label="Current streaks"]');document.querySelector('main').after(streaks);
+  document.querySelectorAll('.editor').forEach(editor=>{
+    const st=Object.values(COLL).find(st=>st.ui.editor===editor);
+    const connections=el('div',{class:'note-connections'});editor.append(connections);st.ui.connections=connections;
+  });
+  applyPreferences();
+  window.addEventListener('dsl-sync',updateSyncStatus);
+  window.addEventListener('pagehide',flushAll);
+  document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();if(!document.querySelector('dialog[open]'))openSearch();}});
+}
+
 /* ---------- wiring ---------- */
 $('prev').appendChild(svg(ICON_LEFT));
 $('next').appendChild(svg(ICON_RIGHT));
@@ -2574,7 +2942,7 @@ $('wprev').addEventListener('click',()=>goWeek(keyOf(addDays(parseKey(S.weekSel)
 $('wnext').addEventListener('click',()=>{if(S.weekSel<keyOf(addDays(parseKey(mondayOf(todayKey())),7))) goWeek(keyOf(addDays(parseKey(S.weekSel),7)));});
 $('mprev').addEventListener('click',()=>goMonth(-1));
 $('mnext').addEventListener('click',()=>{if(S.monthSel<monthOf(new Date())) goMonth(1);});
-$('retry').addEventListener('click',()=>{setStatus('Saving...');pump();});
+$('retry').addEventListener('click',()=>{setStatus('Saving...');window.DSL.retrySync();pump();});
 $('openSettings').addEventListener('click',()=>setTab('settings'));
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   /* when an update arrives, save what is open and reload once so the new version runs */
@@ -2594,7 +2962,7 @@ document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()
 $('histSearch').addEventListener('input',e=>{S.hq=e.target.value;S.histLimit=30;renderHistory();});
 $('more').addEventListener('click',()=>{S.histLimit+=30;renderHistory();});
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState!=='visible') return;
+  if(document.visibilityState!=='visible'){flushAll();return;}
   const t=todayKey();
   if(t!==lastToday){
     const wasToday=draft.date===lastToday&&dayTimer===null;
@@ -2616,6 +2984,7 @@ MO.load(S.monthSel);
 setupFormatting();
 dtLoadAll();
 buildHabits();
+initStudySpace();
 openExpanded();
 paintHabits(true);
 renderToday();
@@ -2639,13 +3008,22 @@ setStatus('Loading your entries...');
   S.mode=conn.mode;
   showSyncNote(conn.note);
   pump();
-  const sub=(coll,field,limit,ok)=>S.root.collection(coll).orderBy(field,'desc').limit(limit).onSnapshot(ok,onErr);
-  sub('days','date',500,s=>{clearTimeout(slow);onDays(s);});
-  sub('weeks','start',200,onWeeks);
-  sub('months','month',60,onMonths);
-  sub('ministry','month',60,onMinistry);
-  sub('quizzes','updatedAt',60,onQuizzes);
-  sub('progress','updatedAt',5,onProgress);
-  Object.keys(COLL).forEach(k=>sub(COLL[k].cfg.coll,'updatedAt',500,s=>onColl(COLL[k],s)));
+  const sub=(coll,field,ok)=>{
+    const query=S.root.collection(coll).orderBy(field,'desc');
+    const receive=s=>{
+      if(S.mode==='local'||!s.metadata.fromCache)loadedCollections.add(coll);
+      ok(s);renderHome();
+      if(activeSearchRender)activeSearchRender();
+    };
+    if(S.mode==='cloud')query.onSnapshot({includeMetadataChanges:true},receive,onErr);
+    else query.onSnapshot(receive,onErr);
+  };
+  sub('days','date',s=>{clearTimeout(slow);onDays(s);});
+  sub('weeks','start',onWeeks);
+  sub('months','month',onMonths);
+  sub('ministry','month',onMinistry);
+  sub('quizzes','updatedAt',onQuizzes);
+  sub('progress','updatedAt',onProgress);
+  Object.keys(COLL).forEach(k=>sub(COLL[k].cfg.coll,'updatedAt',s=>onColl(COLL[k],s)));
 })();
 })();
