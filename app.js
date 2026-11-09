@@ -42,6 +42,9 @@ const WEEK_SUMMARY=[
 const FAM_ON=()=>window.DSL.settings.showFamily!==false;
 const PART_TYPES=['Bible reading','Starting a conversation','Following up','Making disciples','Explaining your beliefs','Talk','Other'];
 const WEEK_FIELDS=[
+  {type:'group',style:'card',id:'planCard',label:'My Bible reading',note:'Your own reading through the Bible. Plan it a week ahead; each day fills in from Today.',fields:[
+    {prop:'myReading',label:'Reading for this week',hint:'For example, Genesis 12-17'},
+    {type:'slot',id:'planBox'}]},
   {type:'group',style:'card',label:'This week',note:'Your regular week in one list. Daily text and Bible reading fill in from Today.',fields:[
     {type:'slot',id:'weekCounts'},
     {prop:'mwPrep',type:'check',label:'Prepared for the midweek meeting'},
@@ -52,7 +55,7 @@ const WEEK_FIELDS=[
     {prop:'family',type:'check',label:'Family Worship',showIf:FAM_ON}]},
   {type:'group',style:'card',label:'Midweek meeting',note:'Our Christian Life and Ministry. Follow along in the Meeting Workbook.',fields:[
     {type:'group',style:'sub',label:"Treasures From God's Word",fields:[
-      {prop:'reading',label:"This week's Bible reading (from the Meeting Workbook)",hint:'For example, Jeremiah 45-46'},
+      {prop:'reading',label:'Meeting Workbook Bible reading',hint:'For example, Jeremiah 45-46'},
       {type:'slot',id:'gemsList'},
       {prop:'mwGem',label:'The spiritual gem I could share',multi:true}]},
     {type:'group',style:'sub',label:'Apply Yourself to the Field Ministry',fields:[
@@ -531,7 +534,7 @@ function setupColl(cfg){
   }
   const chips=el('div',{class:'chips'});
   const rows=el('div',{class:'rows'});
-  const listView=el('div',{class:'view'},el('div',{class:'bar'},search,newBtn),tpl,chips,rows);
+  const listView=el('div',{class:'view listview'},el('div',{class:'bar'},search,newBtn),tpl,chips,rows);
 
   const back=el('button',{type:'button',class:'link'},'Back to '+cfg.plural.toLowerCase());
   back.addEventListener('click',()=>closeItem(st));
@@ -573,7 +576,7 @@ function setupColl(cfg){
   const editor=el('div',{class:'editor',hidden:true},editorKids);
 
   st.ui.listView=listView;st.ui.editor=editor;st.ui.chips=chips;st.ui.rows=rows;st.ui.confirm=confirm;
-  st.ui.root=el('div',{class:'view',hidden:true},listView,editor);
+  st.ui.root=el('div',{class:'view collroot',hidden:true},listView,editor);
   $('libBody').append(st.ui.root);
 }
 function touchColl(st){
@@ -663,8 +666,10 @@ async function itemHelp(st){
 }
 function renderColl(st){
   const cfg=st.cfg,ui=st.ui;
-  if(st.open){ui.listView.hidden=true;ui.editor.hidden=false;paintEditor(st,false);return;}
-  ui.listView.hidden=false;ui.editor.hidden=true;
+  /* phones show the list or the open item; wide screens show both side by side */
+  ui.root.classList.toggle('editing',!!st.open);
+  ui.editor.hidden=!st.open;
+  if(st.open) paintEditor(st,false);
   const all=Object.values(st.items);
   const fl=cfg.filters?cfg.filters(all):[{id:'all',label:'All',test:()=>true}];
   let active=fl.find(f=>f.id===st.filter);
@@ -681,7 +686,7 @@ function renderColl(st){
   ui.rows.replaceChildren(...items.map(i=>{
     const r=cfg.row(i);
     const d=new Date(i.updatedAt||Date.now());
-    return el('button',{type:'button',class:'row',onclick:()=>openItem(st,i.id)},
+    return el('button',{type:'button',class:'row','aria-current':i.id===st.open?'true':null,onclick:()=>openItem(st,i.id)},
       el('h3',{text:r.title}),
       el('div',{class:'meta'},r.chips.map(c=>el('span',{class:'chip',text:c})),el('span',{text:fmtShort(d)})),
       r.snippet?el('p',{class:'snip',text:r.snippet}):null);
@@ -722,6 +727,7 @@ function makeDocForm(key,coll,fields,norm){
       st.draft[prop]=val;
       st.touch();
       if(ff&&(ff.type==='select'||ff.type==='check')) st.paint(false);
+      if(st.onField) st.onField(prop);
     })));
   };
   st.touch=function(){
@@ -759,7 +765,8 @@ function makeDocForm(key,coll,fields,norm){
   return st;
 }
 const WK=makeDocForm('week','weeks',WEEK_FIELDS,normWeek);
-WK.onPaint=()=>renderWeekReview();
+WK.onPaint=()=>{renderWeekReview();renderPlanBox();};
+WK.onField=p=>{if(p==='myReading') renderPlanBox();};
 const MO=makeDocForm('month','months',MONTH_FIELDS,normMonth);
 const MIN=makeDocForm('min','ministry',MIN_FIELDS,normMin);
 const minMonth=()=>monthOf(parseKey(S.weekSel));
@@ -804,7 +811,7 @@ function buildHabits(){
   HABITS.forEach(hb=>{
     const k=hb.key;
     const check=el('button',{type:'button',class:'check',role:'checkbox','aria-checked':'false','aria-label':hb.label+' done',id:'check-'+k,
-      onclick:()=>{draft[k].done=!draft[k].done;if(k==='text'&&draft[k].done) fillDtScripture();touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
+      onclick:()=>{draft[k].done=!draft[k].done;if(k==='text'&&draft[k].done) fillDtScripture();if(k==='bible'&&draft[k].done){if(!draft.bible.ref.trim()){const pl=todayPlan(draft.date);if(pl&&pl.today) draft.bible.ref=pl.today;}markReadQuiet(draft.bible.ref);}touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
     const sum=el('p',{class:'habit-sum',id:'sum-'+k});
     const tg=el('button',{type:'button',class:'toggle',id:'toggle-'+k,'aria-expanded':'false','aria-controls':'body-'+k,
       onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:'Notes'}),svg(ICON_DOWN));
@@ -935,13 +942,11 @@ function renderToday(){
   $('next').disabled=S.sel>=t;
   $('jumpWrap').hidden=S.sel===t;
   $('firstRun').hidden=!(S.fresh&&Object.keys(S.days).length===0&&!HABITS.some(hb=>hasContent(draft[hb.key])));
-  const wk=mondayOf(S.sel);
-  const w=(WK.draft&&WK.draft.start===wk)?WK.draft:WK.map[wk];
-  const reading=w&&w.reading?w.reading.trim():'';
-  $('weekHint').hidden=!reading;
-  $('weekHint').textContent=reading?"This week's reading: "+reading:'';
+  const plan=todayPlan(S.sel);
+  $('weekHint').hidden=!plan;
+  $('weekHint').textContent=plan?"This week's reading: "+plan.week+(plan.today?'. Today: '+plan.today+'.':'. Today: catch up or review.'):'';
   const ph=$('d-bible-ref');
-  if(ph) ph.placeholder=reading||'For example, Genesis 1-2';
+  if(ph) ph.placeholder=(plan&&plan.today)||'For example, Genesis 1-2';
   renderProgress();
   renderStreaks();
   renderSunBanner();
@@ -981,8 +986,8 @@ function renderWeek(){
   $('weekTitle').textContent=fmtShort(s)+' to '+fmtShort(e);
   const cur=mondayOf(todayKey());
   const diff=Math.round((parseKey(cur)-s)/604800000);
-  $('weekRel').textContent=diff===0?'This week':diff===1?'Last week':diff+' weeks ago';
-  $('wnext').disabled=S.weekSel>=cur;
+  $('weekRel').textContent=diff===0?'This week':diff===1?'Last week':diff===-1?'Next week: plan ahead':diff+' weeks ago';
+  $('wnext').disabled=S.weekSel>=keyOf(addDays(parseKey(cur),7));
   const mt=$('minTitle');
   if(mt){const p=minMonth().split('-').map(Number);mt.textContent='Ministry in '+new Date(p[0],p[1]-1,1).toLocaleDateString(undefined,{month:'long'});}
   renderWeekLog();
@@ -1011,6 +1016,7 @@ function renderWeekExtras(){
 }
 function renderWeekLog(){
   renderWeekExtras();
+  renderPlanBox();
   const box=$('weekLog');
   if(!box) return;
   const m=eff(),start=parseKey(S.weekSel),t=todayKey();
@@ -1375,6 +1381,138 @@ const NT_START=39;
 const TOTAL_CH=BOOKS.reduce((a,b)=>a+b[1],0);
 const B={ui:null,sec:'ot',open:null};
 
+/* ---------- weekly reading plan ----------
+   Chapters are numbered 0..1188 across the whole Bible. A suggested week stops just before
+   a new book or a new section of the story, close to your usual pace. */
+const CH_START=[];
+BOOKS.reduce((a,b)=>{CH_START.push(a);return a+b[1];},0);
+const SECTION_STARTS={
+  'Genesis':[3,6,12,18,21,25,29,32,37,42,46],'Exodus':[5,12,16,19,25,32,35],'Leviticus':[8,11,16,18,23,26],
+  'Numbers':[5,9,13,16,20,26,31],'Deuteronomy':[5,12,19,27,31],'Joshua':[6,13,22],'Judges':[3,6,10,13,17],
+  '1 Samuel':[4,8,13,16,21,28],'2 Samuel':[6,11,13,19,22],'1 Kings':[5,9,12,17,20],'2 Kings':[5,9,14,18,21,24],
+  '1 Chronicles':[10,17,22],'2 Chronicles':[10,21,29,33],'Ezra':[7],'Nehemiah':[8],'Esther':[5],
+  'Job':[4,15,22,32,38],'Proverbs':[10,22,25,30],'Isaiah':[7,13,24,28,36,40,49,58],
+  'Jeremiah':[7,11,21,26,30,34,40,46],'Ezekiel':[4,12,25,33,40],'Daniel':[7],
+  'Matthew':[5,8,11,14,19,24,26],'Mark':[5,9,11,14],'Luke':[5,9,13,18,22],'John':[5,9,13,18],
+  'Acts':[6,10,13,16,21,27],'Romans':[6,9,12],'1 Corinthians':[7,12],'2 Corinthians':[8,10],'Hebrews':[7,11],'Revelation':[4,12,17]
+};
+const gIndex=(bi,ch)=>CH_START[bi]+ch-1;
+function gPos(g){let bi=BOOKS.length-1;while(CH_START[bi]>g) bi--;return {bi:bi,ch:g-CH_START[bi]+1};}
+function goodStart(g){
+  if(g>=TOTAL_CH) return true;
+  const p=gPos(g),name=BOOKS[p.bi][0];
+  if(p.ch===1||name==='Psalms') return true;
+  const s=SECTION_STARTS[name];
+  return !!(s&&s.indexOf(p.ch)>=0);
+}
+function rangeLabel(a,b){
+  const parts=[];
+  for(let g=a;g<=b;){
+    const p=gPos(g),last=Math.min(b,CH_START[p.bi]+BOOKS[p.bi][1]-1),c2=gPos(last).ch;
+    parts.push(BOOKS[p.bi][0]+' '+(p.ch===c2?p.ch:p.ch+'-'+c2));
+    g=last+1;
+  }
+  return parts.join('; ');
+}
+function refChapters(text){
+  const out=[];
+  parseRef(text).out.forEach(o=>o.chapters.forEach(c=>out.push(gIndex(o.bi,c))));
+  return out;
+}
+function weekDoc(k){return (WK.draft&&WK.draft.start===k)?WK.draft:WK.map[k];}
+function planPace(weekStart){
+  const ns=[];
+  for(let i=1;i<=6&&ns.length<4;i++){
+    const w=weekDoc(keyOf(addDays(parseKey(weekStart),-7*i)));
+    const n=w&&w.myReading?refChapters(w.myReading).length:0;
+    if(n) ns.push(n);
+  }
+  return ns.length?ns.reduce((a,b)=>a+b,0)/ns.length:6;
+}
+function planStart(weekStart){
+  for(let i=1;i<=6;i++){
+    const w=weekDoc(keyOf(addDays(parseKey(weekStart),-7*i)));
+    const chs=w&&w.myReading?refChapters(w.myReading):[];
+    if(chs.length) return Math.max(...chs)+1;
+  }
+  for(let g=0;g<TOTAL_CH;g++){
+    const p=gPos(g);
+    if((S.bible.read[String(p.bi)]||[]).indexOf(p.ch)<0) return g;
+  }
+  return 0;
+}
+function suggestReading(weekStart){
+  const g0=planStart(weekStart);
+  if(g0>=TOTAL_CH) return null;
+  const n=planPace(weekStart);
+  const lo=Math.max(2,Math.round(n*0.6)),hi=Math.max(lo,Math.round(n*1.5));
+  let best=null;
+  for(let L=lo;L<=hi&&g0+L<=TOTAL_CH;L++){
+    if(!goodStart(g0+L)) continue;
+    const crosses=gPos(g0+L-1).bi!==gPos(g0).bi;
+    const score=Math.abs(L-n)+(crosses?2:0);
+    if(!best||score<best.score) best={L:L,score:score};
+  }
+  const L=best?best.L:Math.min(Math.max(1,Math.round(n)),TOTAL_CH-g0);
+  const end=g0+L;
+  return {text:rangeLabel(g0,end-1),next:end<TOTAL_CH?rangeLabel(end,end):'',clean:!!best,pace:n};
+}
+/* spreads the week's chapters over Monday to Sunday; days with no chapter are for catching up */
+function planDays(weekStart,text){
+  const chs=refChapters(text||'');
+  const base=Math.floor(chs.length/7),extra=chs.length%7;
+  const days=[];
+  let i=0;
+  for(let d=0;d<7;d++){
+    const n=base+(d<extra?1:0);
+    const part=chs.slice(i,i+n);i+=n;
+    days.push({k:keyOf(addDays(parseKey(weekStart),d)),chs:part,label:part.length?rangeLabel(part[0],part[part.length-1]):''});
+  }
+  return days;
+}
+function todayPlan(k){
+  const wk=mondayOf(k),w=weekDoc(wk);
+  if(!w||!w.myReading||!w.myReading.trim()) return null;
+  const day=planDays(wk,w.myReading).find(d=>d.k===k);
+  return {week:w.myReading.trim(),today:day?day.label:''};
+}
+function isRead(g){const p=gPos(g);return (S.bible.read[String(p.bi)]||[]).indexOf(p.ch)>=0;}
+function renderPlanBox(){
+  const box=$('planBox');
+  if(!box||!WK.draft) return;
+  const wk=S.weekSel,txt=String(WK.draft.myReading||'').trim();
+  const kids=[];
+  const sug=suggestReading(wk);
+  const useSug=()=>{if(!WK.draft||!sug) return;WK.draft.myReading=sug.text;WK.touch();WK.paint(true);renderPlanBox();renderToday();};
+  if(!txt){
+    if(sug){
+      kids.push(el('div',{class:'suggest'},
+        el('p',{class:'cap',text:'Suggested'}),
+        el('p',{class:'sugtext',text:sug.text}),
+        el('p',{class:'hint',text:(sug.clean?'Stops at a natural break, so next week starts fresh with '+sug.next+'.':'About '+Math.round(sug.pace)+' chapters, your usual pace.')}),
+        el('div',{class:'actions'},el('button',{type:'button',class:'btn',onclick:useSug},'Use this'))));
+    }
+    box.replaceChildren(...kids);
+    return;
+  }
+  const chs=refChapters(txt);
+  if(!chs.length){box.replaceChildren(el('p',{class:'hint',text:'Write it like "Genesis 12-17" so the app can plan your days.'}));return;}
+  const read=chs.filter(isRead).length,pct=Math.round(100*read/chs.length);
+  kids.push(el('div',{class:'pbar',role:'img','aria-label':pct+' percent read'},el('i',{style:'width:'+pct+'%'})),
+    el('p',{class:'hint',text:read+' of '+chs.length+' chapters read'+(read===chs.length?'. Well done!':'')}));
+  const m=eff(),t=todayKey();
+  kids.push(el('div',{class:'planrows'},planDays(wk,txt).map(d=>{
+    const day=m[d.k],b=day&&day.bible;
+    const did=!!(b&&b.done);
+    const status=b&&b.ref?b.ref:(did?'Done':(d.k<t?'Not logged':(d.k===t?'Today':'')));
+    return el('button',{type:'button',class:'planrow'+(d.k===t?' now':''),onclick:()=>openDay(d.k),disabled:d.k>t},
+      el('span',{class:'pday',text:fmtDay(parseKey(d.k))}),
+      el('span',{class:'pplan',text:d.label||'Catch up or review'}),
+      el('span',{class:'pdone'+(did?' on':'')},did?svg(ICON_CHECK):null,el('span',{text:status})));
+  })));
+  box.replaceChildren(...kids);
+}
+
 function normBible(v){
   const o={read:{},rounds:Number(v&&v.rounds)||0,updatedAt:Number(v&&v.updatedAt)||0};
   const r=(v&&v.read)||{};
@@ -1447,6 +1585,7 @@ function onProgress(snap){
   const d=snap.docs.find(x=>x.id==='bible');
   if(d&&!pending.has('progress/bible')&&!writing) S.bible=normBible(d.data());
   if(S.tab==='library'&&S.lib==='bible') renderBible();
+  if(S.tab==='week') renderPlanBox();
 }
 
 const BOOK_KEYS=BOOKS.map(b=>normBook(b[0]));
@@ -1501,6 +1640,17 @@ function rangeText(chs){
     s=chs[i];p=chs[i];
   }
   return parts.join(', ');
+}
+/* checking off Bible reading also counts those chapters in the read-through and the week's plan */
+function markReadQuiet(text){
+  const r=parseRef(text);
+  if(!r.out.length) return;
+  r.out.forEach(o=>{
+    const set=new Set(S.bible.read[String(o.bi)]||[]);
+    o.chapters.forEach(c=>set.add(c));
+    S.bible.read[String(o.bi)]=Array.from(set).sort((a,b)=>a-b);
+  });
+  saveBible();
 }
 function markChapters(){
   const msg=$('markmsg');
@@ -1596,14 +1746,20 @@ function renderSunBanner(){
   const wk=mondayOf(todayKey());
   const w=(WK.draft&&WK.draft.start===wk)?WK.draft:WK.map[wk];
   const done=!!(w&&String(w.reviewAns||'').trim());
-  if(!(S.sel===todayKey()&&new Date().getDay()===0)||done){b.hidden=true;return;}
+  const nk=keyOf(addDays(parseKey(wk),7)),nw=weekDoc(nk);
+  const planned=!!(nw&&String(nw.myReading||'').trim());
+  const dow=new Date().getDay();
+  const showReview=dow===0&&!done,showPlan=(dow===0||dow===6)&&!planned;
+  if(S.sel!==todayKey()||!(showReview||showPlan)){b.hidden=true;return;}
   b.hidden=false;
-  b.replaceChildren(el('p',{text:"It's Sunday. Finish your weekly summary and review."}),
-    el('button',{type:'button',class:'btn',onclick:()=>{
-      S.weekSel=wk;setTab('week');
-      const f=$('weekFold');
-      if(f){f.open=true;f.scrollIntoView({block:'start'});}
-    }},'Open this week'));
+  b.replaceChildren(el('p',{text:showReview?"It's Sunday. Finish your weekly summary and review"+(showPlan?", and plan next week's reading.":'.'):"Plan next week's Bible reading."}),
+    el('div',{class:'actions'},
+      showReview?el('button',{type:'button',class:'btn',onclick:()=>{
+        S.weekSel=wk;setTab('week');
+        const f=$('weekFold');
+        if(f){f.open=true;f.scrollIntoView({block:'start'});}
+      }},'Open this week'):null,
+      showPlan?el('button',{type:'button',class:showReview?'btn ghost':'btn',onclick:()=>{S.weekSel=nk;setTab('week');}},'Plan next week'):null));
 }
 
 /* ---------- verse review ---------- */
@@ -2323,7 +2479,7 @@ $('prev').addEventListener('click',()=>goTo(keyOf(addDays(parseKey(S.sel),-1))))
 $('next').addEventListener('click',()=>{if(S.sel<todayKey()) goTo(keyOf(addDays(parseKey(S.sel),1)));});
 $('jumpToday').addEventListener('click',()=>goTo(todayKey()));
 $('wprev').addEventListener('click',()=>goWeek(keyOf(addDays(parseKey(S.weekSel),-7))));
-$('wnext').addEventListener('click',()=>{if(S.weekSel<mondayOf(todayKey())) goWeek(keyOf(addDays(parseKey(S.weekSel),7)));});
+$('wnext').addEventListener('click',()=>{if(S.weekSel<keyOf(addDays(parseKey(mondayOf(todayKey())),7))) goWeek(keyOf(addDays(parseKey(S.weekSel),7)));});
 $('mprev').addEventListener('click',()=>goMonth(-1));
 $('mnext').addEventListener('click',()=>{if(S.monthSel<monthOf(new Date())) goMonth(1);});
 $('retry').addEventListener('click',()=>{setStatus('Saving...');pump();});

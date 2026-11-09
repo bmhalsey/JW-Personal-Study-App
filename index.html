@@ -134,6 +134,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .bar.wrapbar{flex-wrap:wrap}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 
+.hint a{color:var(--accent)}
 .helpbox{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--bg)}
 .helpcap{margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .helptext{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px}
@@ -228,6 +229,25 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .morebtn.open svg{transform:rotate(180deg)}
 .morewrap{display:flex;flex-direction:column;gap:14px}
 
+/* library: phones show the list or the open item */
+.collroot.editing>.listview{display:none}
+.row[aria-current="true"]{background:var(--sunken)}
+
+/* reading plan */
+.suggest{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:10px;background:var(--sunken)}
+.suggest .cap{margin:0}
+.sugtext{margin:0;font:700 22px/1.2 var(--font-display);color:var(--accent)}
+.planrows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.planrow{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,auto);gap:8px;align-items:center;min-height:44px;padding:8px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--fg);font:15px/1.3 var(--font-body);text-align:left;cursor:pointer}
+.planrow:disabled{cursor:default;opacity:.75}
+.planrow.now{background:var(--sunken)}
+.planrow:not(:disabled):hover{background:var(--sunken)}
+.pday{font-weight:600}
+.pplan{overflow-wrap:anywhere}
+.pdone{display:inline-flex;align-items:center;gap:4px;justify-self:end;font-size:13px;color:var(--muted);text-align:right}
+.pdone.on{color:var(--accent);font-weight:600}
+.pdone svg{width:16px;height:16px}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}
@@ -255,6 +275,72 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .rt-li .mk{position:absolute;left:0;top:0;color:var(--muted);font-variant-numeric:tabular-nums}
 .rt-todo{display:flex;align-items:flex-start;gap:10px;min-height:32px}
 .rt-todo input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+
+/* computers and tablets in landscape: sidebar, bigger text, two columns */
+@media (min-width:1000px){
+  body{font-size:17px;padding:28px 32px 64px}
+  .wrap{max-width:1280px;display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:auto auto auto 1fr;column-gap:40px;row-gap:20px;align-items:start}
+  .mast{grid-column:1 / -1;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .brand{font-size:15px}
+  .status,.link{font-size:15px}
+  .wrap>section[aria-label="Current streaks"]{grid-column:1;grid-row:2}
+  .tabs{grid-column:1;grid-row:3;grid-template-columns:1fr;padding:6px;position:sticky;top:20px}
+  .tabs button{min-height:52px;font-size:17px;text-align:left;padding:0 16px}
+  main{grid-column:2;grid-row:2 / span 3;min-width:0}
+  .streak-grid{grid-template-columns:1fr;border-block:0}
+  .streak{flex-direction:row;align-items:baseline;gap:12px;padding:10px 0;border-left:0;border-bottom:1px solid var(--line)}
+  .streak b{font-size:34px;min-width:56px}
+  .streak span{font-size:15px}
+  .sect{font-size:28px}
+  .datetext h2{font-size:30px}
+  .field label,.boxlabel{font-size:14px}
+  input[type=text],input[type=search],input[type=password],textarea,select{font-size:17px;padding:12px 14px}
+  textarea{min-height:110px}
+  .hint{font-size:15px}
+  .btn{min-height:46px;font-size:16px}
+  .pill{font-size:15px;min-height:42px}
+  .row h3{font-size:18px}
+  .row .snip{font-size:16px}
+
+  /* Today: daily text and progress on the left, your notes on the right */
+  #view-today{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);column-gap:28px;row-gap:16px;align-items:start}
+  #view-today>*{grid-column:1}
+  #view-today>#habits{grid-column:2;grid-row:1 / span 30}
+  .dtcard{padding:24px}
+  .dtquote{font-size:34px}
+  .dtref{font-size:22px}
+  .dtbody{font-size:17px}
+  .habit-head{padding:14px 16px}
+  .habit-body{padding:4px 16px 20px}
+  .habit-title h3{font-size:20px}
+
+  /* Week: cards in two columns */
+  #weekForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  #weekForm>#planCard,#weekForm>.fold,#weekForm>#ministryForm{grid-column:1 / -1}
+  #weekForm>#ministryForm>.wcard{max-width:calc(50% - 10px)}
+  #planCard .planrows{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:0;gap:8px}
+  #planCard .planrow{grid-template-columns:1fr;align-content:start;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:10px}
+  #planCard .pdone{justify-self:start;text-align:left}
+  .wcard{padding:18px}
+  .foldbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;row-gap:14px}
+  .foldbody>.subhead,.foldbody>#weekLog,.foldbody>#weekReview,.foldbody>.checkrow{grid-column:1 / -1}
+
+  /* Library: list on the left, the open item on the right */
+  #libBody .collroot{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:start}
+  #libBody .collroot.editing>.listview{display:flex}
+  #libBody .collroot>.editor{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto;padding:4px 4px 16px}
+  textarea.tall{min-height:420px}
+
+  /* Review and Settings */
+  .heatwrap{max-width:440px}
+  #view-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+  #view-settings>.bar,#view-settings>.sect{grid-column:1 / -1}
+  .qcard{padding:24px}
+  .qtext{font-size:22px}
+}
+@media (min-width:1500px){
+  .wrap{max-width:1440px}
+}
 </style>
 </head>
 <body>
