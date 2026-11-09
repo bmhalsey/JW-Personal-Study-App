@@ -137,6 +137,8 @@ class StudyWorkflows(unittest.TestCase):
         for width in [390, 768, 1280]:
             self.page.set_viewport_size({'width': width, 'height': 900})
             self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+        # on a computer, Today shows one section at a time; pick Personal study
+        self.page.locator('#habitTabs').get_by_role('button', name='Personal study').click()
         self.page.get_by_role('button', name='Write', exact=True).click()
         ta = self.page.get_by_label('Study notes', exact=True)
         ta.fill('What I noticed')
