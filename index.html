@@ -228,6 +228,21 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .morebtn.open svg{transform:rotate(180deg)}
 .morewrap{display:flex;flex-direction:column;gap:14px}
 
+/* daily text card */
+.dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.dtcard>*{min-width:0}
+.dtcard.empty{gap:6px;padding:12px 16px}
+.dtcap{margin:0;display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.dtmain{display:flex;flex-direction:column;gap:8px;color:var(--fg);text-decoration:none;border-radius:10px}
+.dtquote{margin:0;font:700 26px/1.25 var(--font-display);text-wrap:balance;overflow-wrap:anywhere}
+.dtref{margin:0;font:700 19px/1.2 var(--font-display);color:var(--gold)}
+.dtgo{margin:0;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--accent)}
+.dtbody{display:flex;flex-direction:column;gap:10px;font-size:16px}
+.dtbody p{margin:0}
+.dtverse{padding:10px 12px;border-radius:8px;background:var(--sunken);font-size:15px}
+.dtsrc{font-size:13px;color:var(--muted)}
+.dtmemo{margin:0;padding:8px 12px;border-radius:8px;border:1px solid var(--line-strong);font-size:14px}
+
 /* formatting bar and formatted text */
 .fmtbar{display:flex;gap:6px;flex-wrap:wrap;padding:6px;border-radius:10px;background:var(--sunken)}
 .fmtb{display:inline-flex;align-items:center;gap:6px;min-height:40px;min-width:40px;justify-content:center;padding:0 10px;border:0;border-radius:8px;background:var(--surface);color:var(--fg);font:600 14px var(--font-body);cursor:pointer}
@@ -274,6 +289,7 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
         <button type="button" class="icon" id="next" aria-label="Next day"></button>
       </div>
       <p class="jump" id="jumpWrap" hidden><button type="button" class="link" id="jumpToday">Back to today</button></p>
+      <section class="dtcard" id="dtCard" aria-label="Daily text" hidden></section>
       <div class="progress">
         <div class="segs" id="segs"></div>
         <p id="progressText"></p>
