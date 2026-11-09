@@ -338,6 +338,17 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 /* computer: which section the writing panel shows */
 #habitTabs{display:none}
 
+/* Bible reading questions */
+.grp{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.grp>.boxlabel{margin:0;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.qn{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-size:12px;font-weight:700;vertical-align:1px}
+.kindrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kindrow label{font-size:14px;font-weight:600;color:var(--muted)}
+.kindrow select{width:auto;min-height:38px;padding:6px 10px;font-size:15px}
+.morebtn.dashed{background:transparent;border:1px dashed var(--line-strong)}
+#saveVerseSlot:empty,#saveQSlot:empty{display:none}
+#saveVerseSlot .btn,#saveQSlot .btn{min-height:38px;font-size:14px}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}

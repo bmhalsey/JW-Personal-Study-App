@@ -11,24 +11,40 @@ const HABITS=[
     {prop:'note',label:'Comment',multi:true,rows:4,hint:'The main point of the comments, or your own thoughts'},
     /* older entries may have this; it only shows when it has something in it */
     {prop:'apply',label:'How I can use it',multi:true,showIf:s=>!!String(s.apply||'').trim()}]},
+  /* Bible reading: the three main questions change with the kind of book (see KINDS);
+     paintBibleLayout puts them in order and labels them. */
   {key:'bible',label:'Bible reading',saveVerse:true,saveQuestion:true,markRead:true,help:true,fields:[
     {type:'slot',id:'todayCh'},
-    {prop:'ref',label:'What I read',hint:'For example, Genesis 1-2'},
-    {prop:'gems',label:'What spiritual gems did I find?',multi:true,hint:'These also show up in Week to help you get ready for the midweek meeting'},
-    {prop:'note',label:'What it teaches me about Jehovah',multi:true},
-    {prop:'summary',label:'What happened',multi:true,more:true},
-    {prop:'people',label:'People and the choices they made',multi:true,more:true},
-    {prop:'verse',label:'Verse that stood out',hint:'For example, Genesis 2:21-23',more:true,link:true},
-    {prop:'verseWhy',label:'Why it stood out',multi:true,more:true},
-    {prop:'question',label:'A question I have',multi:true,more:true}]},
+    {type:'slot',id:'bibleIntro'},
+    {prop:'ref',label:'What I read',hint:'For example, Genesis 1-2',showIf:s=>showReadBox(s)},
+    {type:'slot',id:'kindPick'},
+    {prop:'line',label:'In one sentence, what was this about?',multi:true,hint:'Busy day? This line and the tick box are enough.'},
+    {type:'slot',id:'deeperBtn'},
+    {type:'group',style:'plain',gid:'deep',showIf:s=>deepVisible(s),fields:[
+      {prop:'summary',label:'What happened?',multi:true},
+      {prop:'principle',label:'What principle is behind it?',multi:true},
+      {prop:'reasons',label:'What reasons are given for it?',multi:true},
+      {prop:'note',label:'What does it show about Jehovah?',multi:true},
+      {prop:'people',label:'Who made a choice I can learn from?',multi:true},
+      {prop:'keepLine',label:'A line I want to remember',multi:true},
+      {prop:'fulfil',label:'How was it fulfilled, or how will it be?',multi:true},
+      {prop:'apply',label:'How can I apply it?',multi:true},
+      {prop:'gems',label:'A spiritual gem',multi:true,hint:'For the midweek meeting'}]},
+    {type:'group',style:'grp',label:'A verse to remember',more:true,fields:[
+      {prop:'verse',label:'Verse',bare:true,hint:'For example, Genesis 14:22, 23',link:true},
+      {prop:'verseWhy',label:'Why it stood out',bare:true,multi:true,hint:'Why it stood out'},
+      {type:'slot',id:'saveVerseSlot'}]},
+    {type:'group',style:'grp',label:'A question to research',more:true,fields:[
+      {prop:'question',label:'A question to research',bare:true,multi:true,hint:'Something you want to look into'},
+      {type:'slot',id:'saveQSlot'}]}]},
   {key:'study',label:'Personal study',saveQuestion:true,help:true,writer:true,fields:[
     {prop:'ref',label:'Topic',hint:'What are you studying?',inWriter:true},
     {prop:'note',label:'What I learned',multi:true,inWriter:true},
     {prop:'apply',label:'How I can apply it',multi:true},
     {prop:'question',label:'Question to look into next',multi:true}]}
 ];
-const HPROPS=['title','ref','vtext','gems','summary','note','apply','people','verse','verseWhy','question','help','verseSaved','qSaved'];
-const TEXTPROPS=['ref','vtext','gems','summary','note','apply','people','verse','verseWhy','question','help'];
+const HPROPS=['title','ref','vtext','line','gems','summary','principle','reasons','note','apply','people','keepLine','fulfil','verse','verseWhy','question','help','verseSaved','qSaved','kind'];
+const TEXTPROPS=['ref','vtext','line','gems','summary','principle','reasons','note','apply','people','keepLine','fulfil','verse','verseWhy','question','help'];
 
 const WEEK_GOALS=['Complete the assigned reading','Identify what the passage teaches about Jehovah','Study one character, event, or question','Choose one personal application'];
 const WEEK_SUMMARY=[
@@ -136,6 +152,80 @@ const TPL_CHARACTER="NAME AND MEANING\n\nFAMILY AND BACKGROUND\n\nTIME PERIOD AN
 const TPL_BOOK="NAME AND MEANING\n\nWRITER\n\nTIME PERIOD COVERED\n\nLOCATION AND HISTORICAL SETTING\n\nPURPOSE OF THE BOOK\n\nBASIC OUTLINE\n1.\n2.\n3.\n4.\n\nMAIN PEOPLE\n\nMAJOR EVENTS\n\nWHAT THE BOOK TEACHES ABOUT JEHOVAH\n\nIMPORTANT COVENANTS OR PROMISES\n\nCONNECTION TO JESUS AND THE KINGDOM\n\nKEY SCRIPTURES\n\nMY SUMMARY OF THE BOOK\nWrite this after completing the book.\n\nQUESTIONS I STILL HAVE\n\nSOURCES\n";
 const TPL_THEME="WHAT THIS THEME MEANS\n\nKEY SCRIPTURES\n\nHOW JEHOVAH SHOWS IT\n\nEXAMPLES OF PEOPLE WHO SHOWED IT OR LACKED IT\n\nHOW I CAN SHOW IT\n\nQUESTIONS I STILL HAVE\n\nSOURCES\n";
 
+/* ---------- Bible reading: questions that fit the kind of book ---------- */
+const KINDS={
+  accounts:{name:'Accounts',q:[['summary','What happened?','The account in a sentence or two'],['note','What does it show about Jehovah?',''],['people','Who made a choice I can learn from, good or bad?','']]},
+  law:{name:'Law',q:[['summary','What arrangement or law is this?','What was Israel asked to do, and when?'],['principle','What principle is behind it?','Why it mattered, then and now'],['note','What does it show about Jehovah?','His holiness, his mercy, his care for details…']]},
+  poetry:{name:'Poetry and wisdom',q:[['summary','What truth or feeling is expressed?','Comfort, trust, praise, grief, wisdom…'],['note','What does it say about Jehovah?','How the writer saw him'],['keepLine','A line I want to remember','Copy the line, then add the reference']]},
+  prophecy:{name:'Prophecy',q:[['summary',"What's the message, to whom, and why?",'Who was it for, and what was happening then?'],['note',"What does it show about Jehovah's purpose?",'What he will do, and why he can be trusted to do it'],['fulfil','How was it fulfilled, or how will it be?','A good one to look up. Save it as a question if you are not sure.']]},
+  letters:{name:'Letters',q:[['summary','What counsel is given?','The main things the writer asks them to do'],['reasons','What reasons are given for it?','The "because" or "so that" behind the counsel'],['apply','How can I apply it?','One specific way this week']]}
+};
+const QPROPS=['summary','principle','reasons','note','people','keepLine','fulfil','apply'];
+/* which set fits a chapter: book index (0 = Genesis) and chapter */
+function kindOf(bi,ch){
+  const name=BOOKS[bi][0],r=(a,b)=>ch>=a&&ch<=b;
+  if(name==='Exodus') return r(20,31)||r(35,40)?'law':'accounts';
+  if(name==='Leviticus') return 'law';
+  if(name==='Numbers') return r(11,25)||r(31,32)?'accounts':'law';
+  if(name==='Deuteronomy') return r(5,30)?'law':'accounts';
+  if(['Job','Psalms','Proverbs','Ecclesiastes','Song of Solomon','Lamentations'].indexOf(name)>=0) return 'poetry';
+  if(name==='Daniel') return ch<=6?'accounts':'prophecy';
+  if(name==='Jonah') return 'accounts';
+  if(bi>=BOOKS.findIndex(b=>b[0]==='Isaiah')&&bi<NT_START) return 'prophecy';
+  if(name==='Revelation') return 'prophecy';
+  if(bi>=BOOKS.findIndex(b=>b[0]==='Romans')) return 'letters';
+  return 'accounts';
+}
+function bibleKind(s){
+  if(s&&KINDS[s.kind]) return s.kind;
+  const chs=typeof todayChapters==='function'?todayChapters(draft.date):[];
+  if(chs.length){const p=gPos(chs[0]);return kindOf(p.bi,p.ch);}
+  const r=parseRef(s&&s.ref||'').out[0];
+  return r?kindOf(r.bi,r.chapters[0]):'accounts';
+}
+const deepOpen=new Set(),offPlan=new Set();
+/* the questions fold away on a day you only wrote the one line */
+function deepVisible(s){
+  if(!s) return true;
+  return !nz(s.line)||deepOpen.has(draft.date)||QPROPS.some(p=>nz(s[p]))||!!nz(s.gems);
+}
+/* "What I read" is only needed when you read something other than today's plan */
+function showReadBox(s){
+  const chs=todayChapters(draft.date);
+  if(!chs.length||offPlan.has(draft.date)) return true;
+  return !!nz(s.ref)&&nz(s.ref)!==rangeLabel(chs[0],chs[chs.length-1]);
+}
+function setFieldLabel(wrap,num,text,hint){
+  const lab=wrap.querySelector('label'),inp=wrap.querySelector('textarea,input');
+  if(lab) lab.replaceChildren(...(num?[el('span',{class:'qn','aria-hidden':'true',text:String(num)})]:[]),text);
+  if(inp&&hint!=null) inp.placeholder=hint;
+}
+function paintBibleLayout(s){
+  const deep=$('d-bible-g-deep'),more=$('morewrap-bible');
+  if(!deep||!more) return;
+  const kind=bibleKind(s),K=KINDS[kind];
+  const w=p=>$('d-bible-w-'+p);
+  QPROPS.forEach(p=>{const e=w(p);if(e) e.hidden=true;});
+  K.q.forEach((x,i)=>{const e=w(x[0]);e.hidden=false;setFieldLabel(e,i+1,x[1],x[2]);deep.append(e);});
+  deep.append(w('gems'));
+  const extra=kind==='letters'?['note','What does it show about Jehovah? (optional)','']:['apply',"Something I'll do (optional)",'One specific thing'];
+  const ee=w(extra[0]);ee.hidden=false;setFieldLabel(ee,0,extra[1],extra[2]);more.append(ee);
+  const pick=$('kindPick');
+  if(pick){
+    const sel=el('select',{id:'kindSel','aria-label':'Questions for'},
+      [['','Automatic ('+KINDS[bibleKind(Object.assign({},s,{kind:''}))].name+')']].concat(Object.keys(KINDS).map(k=>[k,KINDS[k].name])).map(o=>el('option',{value:o[0],text:o[1]})));
+    sel.value=KINDS[s.kind]?s.kind:'';
+    sel.addEventListener('change',()=>{draft.bible.kind=sel.value;draft.bible.updatedAt=Date.now();touchDay();paintHabits();});
+    pick.replaceChildren(el('div',{class:'kindrow'},el('label',{for:'kindSel',text:'Questions for'}),sel));
+  }
+  const dv=deepVisible(s);
+  const db=$('deeperBtn');
+  if(db) db.replaceChildren(...(dv?[]:[el('button',{type:'button',class:'morebtn dashed',onclick:()=>{deepOpen.add(draft.date);paintHabits();}},
+    el('span',{},'Go deeper ',el('span',{class:'hint',text:'· 3 questions, a gem, and more'})),svg(ICON_DOWN))]));
+  const mb=$('more-bible');
+  if(!dv){mb.hidden=true;more.hidden=true;}
+}
+
 /* ---------- helpers ---------- */
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
@@ -226,6 +316,7 @@ function mkGroup(f,idPrefix,onChange){
   if(f.style==='sub') return el('div',{class:'part',id:gid},el('p',{class:'ph',text:f.label}),kids);
   if(f.style==='row2') return el('div',{class:'row2',id:gid},kids);
   if(f.style==='plain') return el('div',{class:'plainbox',id:gid},kids);
+  if(f.style==='grp') return el('div',{class:'grp',id:gid,role:'group','aria-label':f.label},el('p',{class:'boxlabel','aria-hidden':'true',text:f.label}),kids);
   return el('div',{class:'scripbox',role:'group','aria-label':f.label,id:gid},el('p',{class:'boxlabel','aria-hidden':'true',text:f.label}),kids);
 }
 /* folding cards remember whether they are open for this visit */
@@ -487,6 +578,7 @@ function studyHelpPrompt(hb,s){
   return helpRules()+'\n\nKeep the whole answer under 220 words. Use these short headings in capitals, each followed by 2 to 4 lines that start with "- ":\nBACKGROUND\nTHINGS YOU MAY HAVE MISSED\nVERSES TO LOOK UP\nQUESTIONS TO THINK ABOUT\nWHERE TO CHECK (search words to use on jw.org or in JW Library)\n\n'
     +'Subject: '+hb.label+'\nReading or topic: '+(s.ref||'(not given)')
     +'\nWhat happened, in the user\'s words: '+(s.summary||'(none)')
+    +'\nIn one sentence: '+(s.line||'(none)')
     +'\nSpiritual gems the user found: '+(s.gems||'(none)')
     +'\nWhat the user learned: '+(s.note||'(none)')
     +'\nPeople and their choices, in the user\'s words: '+(s.people||'(none)')
@@ -932,6 +1024,11 @@ function buildHabits(){
         el('button',{type:'button',class:'link',onclick:()=>{draft[k].help='';touchDay();paintHabits();}},'Clear')));
     }
     const body=el('div',{class:'habit-body',id:'body-'+k,hidden:true},kids);
+    if(k==='bible'){
+      const vs=body.querySelector('#saveVerseSlot'),qs=body.querySelector('#saveQSlot');
+      if(vs) vs.append(body.querySelector('#saveverse'));
+      if(qs) qs.append(body.querySelector('#saveq-bible'));
+    }
     box.append(el('section',{class:'habit',id:'habit-'+k},
       el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{text:hb.label}),sum,el('small',{class:'hint',id:'edited-'+k})),write),
       el('div',{class:'habit-details'},tg,body)));
@@ -940,7 +1037,7 @@ function buildHabits(){
 function paintSummary(k){
   const s=draft[k];
   const n=$('sum-'+k);
-  const t=[s.title||s.ref,cut(readableSnippet(s.note||s.gems||s.summary||s.verse),130)].filter(Boolean).join(' · ');
+  const t=[s.title||s.ref,cut(readableSnippet(s.line||s.note||s.gems||s.summary||s.verse),130)].filter(Boolean).join(' · ');
   n.textContent=t||'No notes yet';
   const w=$('write-'+k);
   if(w) w.textContent=s.note.trim()?'Continue writing':'Write';
@@ -951,12 +1048,16 @@ function paintActions(k){
   const s=draft[k];
   if(k==='bible'){
     const b=$('saveverse');
-    b.disabled=!!s.verseSaved||!s.verse.trim();
-    b.textContent=s.verseSaved?'Saved to Treasury':'Save verse to Treasury';
+    b.hidden=!s.verseSaved&&!s.verse.trim();
+    b.disabled=!!s.verseSaved;
+    b.textContent=s.verseSaved?'Saved to Treasury':'Save to Treasury';
+    const mr=$('markread');
+    if(mr) mr.hidden=todayChapters(draft.date).length>0;
   }
   const q=$('saveq-'+k);
   if(q){
-    q.disabled=!!s.qSaved||!s.question.trim();
+    q.hidden=!s.qSaved&&!s.question.trim();
+    q.disabled=!!s.qSaved;
     q.textContent=s.qSaved?'Saved to Questions':'Save to Questions';
   }
 }
@@ -970,14 +1071,15 @@ function paintHabits(force){
     hb.fields.forEach(f=>paintControl(f,'d-'+k,s[f.prop],force,s));
     const moreF=hb.fields.filter(f=>f.more);
     if(moreF.length){
-      const forced=moreF.some(f=>String(s[f.prop]||'').trim());
+      const extraP=k==='bible'?(bibleKind(s)==='letters'?'note':'apply'):null;
+      const forced=flatFields(moreF).some(f=>String(s[f.prop]||'').trim())||(!!extraP&&!!nz(s[extraP]));
       const mo=forced||moreOpen.has(k);
       $('morewrap-'+k).hidden=!mo;
       const mb=$('more-'+k);
       mb.hidden=forced;
       mb.setAttribute('aria-expanded',String(mo));
       mb.classList.toggle('open',mo);
-      $('moretext-'+k).textContent=mo?'Fewer boxes':'More: what happened, people, verse, question';
+      $('moretext-'+k).textContent=mo?'Fewer boxes':(k==='bible'?'More: a verse, a question, '+(bibleKind(s)==='letters'?'about Jehovah':'something to do'):'More');
     }
     const open=expanded.has(k);
     $('body-'+k).hidden=!open;
@@ -985,6 +1087,7 @@ function paintHabits(force){
     tg.setAttribute('aria-expanded',String(open));
     tg.classList.toggle('open',open);
     if(hb.help){$('helpbox-'+k).hidden=!s.help;$('helptext-'+k).textContent=s.help;}
+    if(k==='bible') paintBibleLayout(s);
     paintSummary(k);
     paintActions(k);
   });
@@ -1007,7 +1110,7 @@ function saveQuestion(k){
 async function dayHelp(k){
   const hb=HABITS.find(h=>h.key===k);
   const s=draft[k];
-  if(!(s.ref||s.summary||s.gems||s.note||s.verse||s.question)){setStatus('Add what you read or a note first, then ask for study help.');return;}
+  if(!(s.ref||s.line||s.summary||s.gems||s.note||s.verse||s.question)){setStatus('Add what you read or a note first, then ask for study help.');return;}
   const date0=draft.date;
   const btn=$('help-btn-'+k);
   btn.disabled=true;btn.textContent='Thinking...';
@@ -1326,7 +1429,10 @@ const Q={phase:'setup',scope:'week',n:5,items:[],i:0,results:[],answer:'',busy:f
 function dayNotes(k,day){
   const t=day.text,b=day.bible,s=day.study,p=[];
   if(t.ref||t.vtext||t.note||t.apply) p.push('Daily text '+cut(t.ref,100)+'. Verse: '+cut(t.vtext,400)+' Comment: '+cut(t.note,500)+(t.apply?' Use: '+cut(t.apply,300):''));
-  if(b.ref||b.summary||b.gems||b.note||b.people||b.verse||b.question) p.push('Bible reading '+cut(b.ref,80)+'. Spiritual gems: '+cut(b.gems,500)+' What it teaches about Jehovah: '+cut(b.note,600)+' What happened: '+cut(b.summary,600)+' People and their choices: '+cut(b.people,400)+' Verse that stood out: '+cut(b.verse,80)+' '+cut(b.verseWhy,300)+' Question: '+cut(b.question,300));
+  if(b.ref||b.line||b.summary||b.gems||b.note||b.people||b.verse||b.question||b.principle||b.reasons||b.keepLine||b.fulfil){
+    const K=KINDS[bibleKind(b)]||KINDS.accounts;
+    p.push('Bible reading '+cut(b.ref,80)+'. In one sentence: '+cut(b.line,300)+' '+K.q.map(x=>x[1]+' '+cut(b[x[0]],600)).join(' ')+' Spiritual gem: '+cut(b.gems,500)+' Verse that stood out: '+cut(b.verse,80)+' '+cut(b.verseWhy,300)+' Question: '+cut(b.question,300));
+  }
   if(s.ref||s.note||s.apply||s.question) p.push('Personal study '+cut(s.ref,100)+'. Learned: '+cut(s.note,600)+' Apply: '+cut(s.apply,300)+' Question: '+cut(s.question,300));
   return p.length?'['+fmtDay(parseKey(k))+']\n'+p.join('\n'):'';
 }
@@ -1366,10 +1472,9 @@ function quizCards(scope){
       if(!day) continue;
       const src=fmtDay(d),b=day.bible,tx=day.text,st=day.study;
       const rd=b.ref||'your Bible reading';
+      if(b.line.trim()) cards.push({q:'In one sentence, what was '+rd+' about?',key:b.line,source:src});
       if(b.gems.trim()) cards.push({q:'What spiritual gems did you find in '+rd+'?',key:b.gems,source:src});
-      if(b.note.trim()) cards.push({q:'What did '+rd+' teach you about Jehovah?',key:b.note,source:src});
-      if(b.summary.trim()) cards.push({q:'What happened in '+rd+'?',key:b.summary,source:src});
-      if(b.people.trim()) cards.push({q:'Who made important choices in '+rd+', and what did they choose?',key:b.people,source:src});
+      (KINDS[bibleKind(b)]||KINDS.accounts).q.forEach(x=>{if(String(b[x[0]]||'').trim()) cards.push({q:rd+': '+x[1],key:b[x[0]],source:src});});
       if(b.verse.trim()&&b.verseWhy.trim()) cards.push({q:'Why did '+b.verse+' stand out to you?',key:b.verseWhy,source:src});
       if(tx.ref.trim()&&tx.vtext.trim()) cards.push({q:'Daily text: what does '+tx.ref.trim()+' say?',key:tx.vtext,source:src});
       if(tx.note.trim()) cards.push({q:'Daily text'+(tx.ref?' ('+tx.ref+')':'')+': what was the main point?',key:tx.note,source:src});
@@ -2732,7 +2837,8 @@ function renderTodayChapters(){
         }
       });
       return el('div',{class:'chrow'},cb,el('label',{for:id,text:rangeLabel(g,g)}),el('a',{class:'reflink',href:chapterHref(g)},'Open'));
-    })));
+    })),
+    offPlan.has(draft.date)?null:el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>{offPlan.add(draft.date);paintHabits();const r=$('d-bible-ref');if(r) r.focus();}},'Read something different?'));
 }
 const dtLine=d=>d.quote+'—'+d.ref+(/[.!?]$/.test(d.ref)?'':'.');
 function fillDtScripture(){
