@@ -18,7 +18,7 @@ python3 -m http.server 8000 --bind 127.0.0.1
 
 Local notes save automatically to this browser. Keep backups outside the browser: clearing site data removes local notes and pending changes.
 
-Optional Firebase sync retains changes in a local outbox until the server acknowledges them. The status distinguishes **Saved on this device**, **Waiting to sync**, and **Synced**. Failed writes retain their pending changes and offer Retry. Existing Firebase setup is still required for cross-device sync.
+Sync uses this app's own Firebase project, built into `adapters.js` (those values identify the project and are meant to be public; Firestore rules keep each account's notes private). In Settings, **Create account** once, then **Sign in** with the same email and password on other devices. A device only contacts Firebase after it has signed in. Firebase sync retains changes in a local outbox until the server acknowledges them. The status distinguishes **Saved on this device**, **Waiting to sync**, and **Synced**. Failed writes retain their pending changes and offer Retry. Existing Firebase setup is still required for cross-device sync.
 
 Library deletions move to **Trash**, where entries can be restored. Trash is included in JSON backups. Settings offers weekly backup reminders, the last backup creation date, JSON download/file restore, Markdown export, and a printable document for saving as PDF. Restore previews replacement counts and retains a local recovery copy before replacing entries. Daily text EPUB files and device settings are separate from note backups.
 
