@@ -504,8 +504,12 @@ function setStatus(text,mode){
   $('status').classList.toggle('err',mode==='err'||mode==='retry');
   $('retry').hidden=mode!=='retry';
 }
-function enqueue(coll,id,payload){
-  pending.set(coll+'/'+id,{coll:coll,id:id,payload:payload});
+/* payload is the whole record (used on this device); write, when given, is just the parts
+   that changed, merged into the saved copy so another device's changes are kept */
+function enqueue(coll,id,payload,write){
+  const key=coll+'/'+id,prev=pending.get(key);
+  if(write&&prev) write=prev.write?Object.assign({},prev.write,write):null;
+  pending.set(key,{coll:coll,id:id,payload:payload,write:write||null});
   pump();
 }
 async function pump(){
@@ -522,7 +526,9 @@ async function pump(){
       pending.delete(key);
       try{
         const ref=S.root.collection(item.coll).doc(item.id);
-        if(item.payload===null) await ref.delete(); else await ref.set(item.payload);
+        if(item.payload===null) await ref.delete();
+        else if(item.write) await ref.set(item.write,{merge:true});
+        else await ref.set(item.payload);
       }catch(e){
         if(!pending.has(key)) pending.set(key,item);
         setStatus('Not saved yet.','retry');
@@ -968,10 +974,19 @@ function touchDay(){
   clearTimeout(dayTimer);
   dayTimer=setTimeout(commitDay,700);
 }
+/* Each day is saved section by section: only the sections you changed are sent, so writing
+   Bible reading on the phone and Daily text on the computer on the same day both survive. */
+let dayBase=null;
 function commitDay(){
   if(dayTimer===null) return;
   clearTimeout(dayTimer);dayTimer=null;
-  enqueue('days',draft.date,clone(draft));
+  const full=clone(draft),base=dayBase&&dayBase.date===draft.date?dayBase:normDay(null,draft.date);
+  const write={date:full.date,updatedAt:full.updatedAt};
+  let changed=0;
+  HABITS.forEach(hb=>{if(!base||JSON.stringify(base[hb.key])!==JSON.stringify(full[hb.key])){write[hb.key]=full[hb.key];changed++;}});
+  dayBase=clone(full);
+  if(!changed) return;
+  enqueue('days',draft.date,full,write);
 }
 /* On a computer, Today's right side shows one section at a time, picked with these tabs */
 const WIDE=window.matchMedia?matchMedia('(min-width:1000px)'):{matches:false,addEventListener(){}};
@@ -1161,6 +1176,7 @@ function goTo(k){
   const pend=pending.get('days/'+k);
   const r=pend?pend.payload:S.days[k];
   draft=r?normDay(clone(r),k):normDay(null,k);
+  dayBase=clone(draft);
   openExpanded();
   paintHabits(true);
   renderToday();
@@ -1170,6 +1186,7 @@ function syncDraft(){
   const r=S.days[draft.date];
   if(r&&r.updatedAt>draft.updatedAt){
     draft=normDay(clone(r),draft.date);
+    dayBase=clone(draft);
     paintHabits(false);
   }
 }
@@ -2210,7 +2227,11 @@ function collectBackup(){
   Object.values(S.quizzes).forEach(d=>add('quizzes',d.id,d));
   Object.values(COLL).forEach(st=>{Object.values(st.items).forEach(d=>add(st.cfg.coll,d.id,d));if(st.draft&&st.draft.updatedAt)add(st.cfg.coll,st.draft.id,st.draft);});
   add('progress','bible',S.bible);
-  window.DSL.outbox().forEach(x=>{if(x.data!==null)add(x.coll,x.id,x.data);else docs.delete(x.coll+'/'+x.id);});
+  window.DSL.outbox().forEach(x=>{
+    if(x.data===null){docs.delete(x.coll+'/'+x.id);return;}
+    const had=docs.get(x.coll+'/'+x.id);
+    add(x.coll,x.id,x.merge&&had?Object.assign({},had.data,x.data):x.data);
+  });
   pending.forEach(x=>{if(x.payload!==null)add(x.coll,x.id,x.payload);else docs.delete(x.coll+'/'+x.id);});
   return {app:'study-log',version:1,exportedAt:new Date().toISOString(),docs:[...docs.values()]};
 }
@@ -3085,7 +3106,9 @@ function updateSyncStatus(){
 }
 function overlayOutbox(coll,map,norm){
   window.DSL.outbox().filter(x=>x.coll===coll).forEach(x=>{
-    if(x.data===null) delete map[x.id];else map[x.id]=norm?norm(x.data,x.id):x.data;
+    if(x.data===null){delete map[x.id];return;}
+    const data=x.merge&&map[x.id]?Object.assign({},map[x.id],x.data):x.data;
+    map[x.id]=norm?norm(data,x.id):data;
   });
   return map;
 }

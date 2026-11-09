@@ -69,7 +69,10 @@ function collRef(path){
       const p=path+'/'+id;
       return {
         id:id,
-        async set(v){lsSet(PFX+p,JSON.stringify(v));notify(path);},
+        async set(v,opts){
+          if(opts&&opts.merge){let old={};try{old=JSON.parse(lsGet(PFX+p)||'{}')||{};}catch(e){}v=Object.assign({},old,v);}
+          lsSet(PFX+p,JSON.stringify(v));notify(path);
+        },
         async delete(){lsDel(PFX+p);notify(path);},
         collection(n){return collRef(p+'/'+n);}
       };
@@ -180,7 +183,9 @@ async function sendOutbox(){
       if(!item)continue;
       const ref=cloudRoot.collection(item.coll).doc(item.id);
       try{
-        if(item.data===null) await ref.delete(); else await ref.set(item.data);
+        if(item.data===null) await ref.delete();
+        else if(item.merge) await ref.set(item.data,{merge:true});
+        else await ref.set(item.data);
         // Another tab may have saved a newer revision or a different document.
         const saved=readOutbox();
         if(saved[key]&&saved[key].revision===item.revision){delete saved[key];}
@@ -199,14 +204,17 @@ function wrapRoot(root){
       return {
         doc(id){
           const d=id?c.doc(id):c.doc();
-          const write=async data=>{
+          /* merge writes only send the parts that changed; two unsent merge writes combine */
+          const write=async(data,opts)=>{
             outbox=readOutbox();
             const key=name+'/'+d.id,previous=outbox[key];
-            outbox[key]={coll:name,id:d.id,data,revision:rand()};
+            let merge=!!(opts&&opts.merge)&&data!==null;
+            if(merge&&previous&&previous.data){data=Object.assign({},previous.data,data);merge=!!previous.merge;}
+            outbox[key]={coll:name,id:d.id,data,merge,revision:rand()};
             try{saveOutbox();}catch(e){if(previous) outbox[key]=previous;else delete outbox[key];throw e;}
             cloudError='';syncEvent();sendOutbox();
           };
-          return {id:d.id,set:write,delete:()=>write(null)};
+          return {id:d.id,set:(data,opts)=>write(data,opts),delete:()=>write(null)};
         },
         orderBy:(f,dir)=>c.orderBy(f,dir)
       };
