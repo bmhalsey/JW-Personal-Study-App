@@ -176,7 +176,7 @@ function mkControl(f,idPrefix,onChange){
   else inp=el('input',{type:'text',id:id,autocomplete:'off',placeholder:f.hint||''});
   if(f.multi&&(f.rows||3)>=10) inp.classList.add('tall');
   if(f.inputmode) inp.setAttribute('inputmode',f.inputmode);
-  const link=f.link?el('a',{class:'reflink',id:id+'-link',target:'_blank',rel:'noopener noreferrer',hidden:true}):null;
+  const link=f.link?el('div',{class:'reflinks',id:id+'-link',hidden:true}):null;
   inp.addEventListener(f.type==='select'?'change':'input',()=>{
     onChange(f.prop,inp.value,f);
     if(link) refLink(link,inp.value);
@@ -220,13 +220,40 @@ function looksLikeRef(t){
     return !!m&&findBook(m[1])>=0;
   });
 }
-function refLink(a,value){
+/* JW Library verse code: book (2 digits), chapter (3), verse (3). Psalm 37:4 is 19037004.
+   Uses the first reference when there are several. Returns null without a chapter and verse. */
+function bibleCode(t){
+  const seg=String(t||'').split(';')[0].trim();
+  const m=seg.match(/^((?:[1-3]\s*)?[A-Za-z][A-Za-z.\s]*?)\s*(\d[\d\s,:\-–—]*)$/);
+  if(!m) return null;
+  const bi=findBook(m[1]);
+  if(bi<0) return null;
+  const r=m[2].replace(/\s+/g,'').match(/^(\d+):(\d+)(?:[,\-–—](\d+)(?::(\d+))?)?/);
+  if(!r) return null;
+  const c1=+r[1],v1=+r[2];
+  let c2=c1,v2=v1;
+  if(r[4]){c2=+r[3];v2=+r[4];}else if(r[3]){v2=+r[3];}
+  if(c1<1||c1>BOOKS[bi][1]||c2<c1||c2>BOOKS[bi][1]||v1<1||(c2===c1&&v2<v1)) return null;
+  const code=(c,v)=>String(bi+1).padStart(2,'0')+String(c).padStart(3,'0')+String(v).padStart(3,'0');
+  const a=code(c1,v1),b=code(c2,v2);
+  return a===b?a:a+'-'+b;
+}
+function refLink(box,value){
   const t=String(value||'').trim();
   const ok=looksLikeRef(t);
-  a.hidden=!ok;
+  box.hidden=!ok;
   if(!ok) return;
-  a.href='https://wol.jw.org/en/wol/l/r1/lp-e?q='+encodeURIComponent(t);
-  a.replaceChildren(document.createTextNode('Read '+t+' on jw.org'),svg(ICON_OUT));
+  const code=bibleCode(t);
+  const kids=[];
+  if(code){
+    kids.push(el('a',{class:'reflink',href:'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+code},
+      'Open '+t.split(';')[0].trim()+' in JW Library'));
+  }
+  const web=el('a',{class:code?'reflink alt':'reflink',target:'_blank',rel:'noopener noreferrer',
+    href:'https://wol.jw.org/en/wol/l/r1/lp-e?q='+encodeURIComponent(t)},code?'jw.org':'Read '+t+' on jw.org');
+  web.append(svg(ICON_OUT));
+  kids.push(web);
+  box.replaceChildren(...kids);
 }
 
 /* Shows notes with bullets, numbers, to-dos and CAPITAL headings as formatted text.
