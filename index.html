@@ -338,6 +338,67 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 /* computer: which section the writing panel shows */
 #habitTabs{display:none}
 
+/* Bible reading questions */
+.grp{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.grp>.boxlabel{margin:0;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.qn{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-size:12px;font-weight:700;vertical-align:1px}
+.kindrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kindrow label{font-size:14px;font-weight:600;color:var(--muted)}
+.kindrow select{width:auto;min-height:38px;padding:6px 10px;font-size:15px}
+.morebtn.dashed{background:transparent;border:1px dashed var(--line-strong)}
+#saveVerseSlot:empty,#saveQSlot:empty{display:none}
+#saveVerseSlot .btn,#saveQSlot .btn{min-height:38px;font-size:14px}
+
+/* book and section introductions */
+.introcard{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:12px;background:var(--sunken);border:1px solid var(--line)}
+.introcap{margin:0;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.introsec{margin:0;font-size:16px;line-height:1.5}
+.introbook{display:flex;flex-direction:column;gap:8px;font-size:15px}
+.introbook p{margin:0}
+.introbook .qlist{gap:4px}
+.introfacts{border-top:1px solid var(--line)}
+.introfacts .stat{padding:6px 2px;font-size:14px}
+.introfacts .stat b{text-align:right;font-weight:600}
+.dtfull .introsec{margin:0 0 10px}
+.dtfull .introbook{margin-bottom:10px}
+
+/* library: sub-tabs, scripture index */
+#libSub{gap:6px}
+#libSub .seg-btn{min-height:38px;padding:0 14px;border-radius:999px;border:0;background:var(--sunken);color:var(--muted);font:600 14px var(--font-body);cursor:pointer}
+#libSub .seg-btn[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 0 0 2px var(--accent) inset}
+.libsubtitle{font:600 18px/1.2 var(--font-display);align-self:center}
+.btn.wide{width:100%}
+.scrgrid{padding:10px 0 14px;border-bottom:1px solid var(--line)}
+.scrgrid .chbtn{position:relative}
+.scrgrid .chbtn:disabled{opacity:.45;cursor:default}
+.scrgrid .chbtn.has{background:var(--heat1);border-color:transparent}
+.scrgrid .chbtn i{position:absolute;top:2px;right:5px;font-style:normal;font-size:11px;font-weight:700;color:var(--accent)}
+.scrgroup{display:flex;flex-direction:column;gap:8px}
+.scrhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.scrhead h3{margin:0;font:700 19px/1.2 var(--font-display);color:var(--gold)}
+.screntry{display:flex;flex-direction:column;gap:4px;width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.scrsrc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.scrsrc i{font-style:normal;padding:1px 8px;border-radius:999px;background:var(--sunken);color:var(--accent)}
+.scrsnip{font-size:15px;overflow-wrap:anywhere}
+.refchips{display:flex;flex-wrap:wrap;gap:6px}
+.refchip{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:var(--sunken);color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
+
+/* numbered routine on Today */
+.stepn{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;border:2px solid var(--line-strong);font:700 12px var(--font-body);color:var(--muted);vertical-align:2px}
+
+/* privacy lock */
+body.locked .wrap{visibility:hidden}
+#lockScreen{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px 24px;background:var(--bg);color:var(--fg)}
+#lockScreen h2{margin:0;font:700 26px/1.2 var(--font-display)}
+#lockScreen .brand{margin:0}
+.lockdots{display:flex;gap:16px}
+.lockdots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent)}
+.lockdots span.on{background:var(--accent)}
+.lockmsg{margin:0;min-height:22px;font-size:15px;color:var(--danger)}
+.lockpad{display:grid;grid-template-columns:repeat(3,72px);gap:16px 22px}
+.lockkey{height:72px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 26px var(--font-display);cursor:pointer}
+.lockkey.del{border:0;background:transparent;color:var(--muted);font-size:24px}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}
@@ -589,6 +650,7 @@ input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:tr
 
 
 <script src="adapters.js"></script>
+<script src="intros.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

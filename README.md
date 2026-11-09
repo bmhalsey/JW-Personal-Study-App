@@ -23,6 +23,15 @@ python3 -m http.server 8000 --bind 127.0.0.1
 - Settings, Look and feel: Match phone / Light / Dark, text size, and the home screen name and icon.
 - On a computer, Today shows the daily text on the left and one section to write in on the right.
 
+## Bible reading, scriptures and Library
+
+- Bible reading asks questions that fit the kind of book (accounts, law, poetry and wisdom, prophecy, letters), starting with a one-sentence summary; on a busy day that line is enough and the rest folds behind "Go deeper".
+- `intros.js` holds book and section introductions (Genesis to Deuteronomy so far), written for this app in its own words from jw.org, the Watchtower Online Library and the Study Bible, without spoilers. They show when a new book or section starts, with links to the Study Bible and the book's introduction video.
+- Library: Notebook, Scriptures (every scripture written anywhere in the app, by book and chapter, plus the Treasury), Follow-up (Questions and Prayer) and Read-through. Meeting notes open from the Week tab; Trash from Settings. Scriptures typed in a note show underneath as JW Library links.
+- Same-day edits from different devices are merged section by section instead of overwriting each other.
+- Settings: an optional privacy PIN (only while signed in, so it can be reset), an iPhone Shortcuts reminder guide, and daily text books saved privately to the signed-in account.
+- `.github/workflows/tests.yml` runs the syntax checks, storage tests and browser tests on every push.
+
 ## Saving and recovery
 
 Local notes save automatically to this browser. Keep backups outside the browser: clearing site data removes local notes and pending changes.
@@ -39,6 +48,7 @@ Full backups wait for all collections to load; cloud collections require an init
 node --check app.js
 node --check adapters.js
 node --check sw.js
+node --check intros.js
 node --test tests/storage.test.cjs
 python3 -m unittest discover -s tests -v
 ```
