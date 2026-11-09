@@ -5,12 +5,14 @@
 const HABITS=[
   {key:'text',label:'Daily text',link:true,fields:[
     {type:'group',style:'box',label:'Scripture',fields:[
-      {prop:'ref',label:'Scripture reference',bare:true,hint:'For example, Psalm 37:4',link:true},
-      {prop:'vtext',label:'The verse',bare:true,multi:true,hint:'The verse, typed or pasted'}]},
+      {prop:'ref',label:'Scripture reference',bare:true,hint:'For example, Psalm 37:4',link:true,showIf:()=>!dtFor(draft.date)},
+      {prop:'vtext',label:'Scripture',bare:true,multi:true,hint:'The scripture, typed or pasted'},
+      {type:'slot',id:'dtExtra'}]},
     {prop:'note',label:'Comment',multi:true,rows:4,hint:'The main point of the comments, or your own thoughts'},
     /* older entries may have this; it only shows when it has something in it */
     {prop:'apply',label:'How I can use it',multi:true,showIf:s=>!!String(s.apply||'').trim()}]},
   {key:'bible',label:'Bible reading',saveVerse:true,saveQuestion:true,markRead:true,help:true,fields:[
+    {type:'slot',id:'todayCh'},
     {prop:'ref',label:'What I read',hint:'For example, Genesis 1-2'},
     {prop:'gems',label:'What spiritual gems did I find?',multi:true,hint:'These also show up in Week to help you get ready for the midweek meeting'},
     {prop:'note',label:'What it teaches me about Jehovah',multi:true},
@@ -879,6 +881,16 @@ function commitDay(){
   clearTimeout(dayTimer);dayTimer=null;
   enqueue('days',draft.date,clone(draft));
 }
+/* On a computer, Today's right side shows one section at a time, picked with these tabs */
+const WIDE=window.matchMedia?matchMedia('(min-width:1000px)'):{matches:false,addEventListener(){}};
+function renderHabitTabs(){
+  let bar=$('habitTabs');
+  if(!bar){bar=el('div',{id:'habitTabs',role:'group','aria-label':'Write for'});$('habits').before(bar);}
+  if(!S.deskHabit) S.deskHabit=(HABITS.find(hb=>!draft[hb.key].done)||HABITS[0]).key;
+  bar.replaceChildren(...HABITS.map(hb=>el('button',{type:'button','aria-pressed':String(S.deskHabit===hb.key),
+    onclick:()=>{S.deskHabit=hb.key;paintHabits();}},draft[hb.key].done?el('span',{class:'done-dot','aria-hidden':'true'}):null,hb.label)));
+  HABITS.forEach(hb=>{const sec=$('habit-'+hb.key);if(sec) sec.classList.toggle('desk-off',S.deskHabit!==hb.key);});
+}
 function buildHabits(){
   const box=$('habits');
   box.replaceChildren();
@@ -920,7 +932,7 @@ function buildHabits(){
         el('button',{type:'button',class:'link',onclick:()=>{draft[k].help='';touchDay();paintHabits();}},'Clear')));
     }
     const body=el('div',{class:'habit-body',id:'body-'+k,hidden:true},kids);
-    box.append(el('section',{class:'habit'},
+    box.append(el('section',{class:'habit',id:'habit-'+k},
       el('div',{class:'habit-head'},check,el('div',{class:'habit-title'},el('h3',{text:hb.label}),sum,el('small',{class:'hint',id:'edited-'+k})),write),
       el('div',{class:'habit-details'},tg,body)));
   });
@@ -949,6 +961,8 @@ function paintActions(k){
   }
 }
 function paintHabits(force){
+  if(!S.deskHabit) S.deskHabit=(HABITS.find(hb=>!draft[hb.key].done)||HABITS[0]).key;
+  if(WIDE.matches) expanded.add(S.deskHabit);
   const d=parseKey(S.sel);
   HABITS.forEach(hb=>{
     const k=hb.key,s=draft[k];
@@ -974,6 +988,7 @@ function paintHabits(force){
     paintSummary(k);
     paintActions(k);
   });
+  renderHabitTabs();
 }
 function saveVerse(){
   const b=draft.bible;
@@ -1061,7 +1076,73 @@ function openDay(k){setTab('today');goTo(k);window.scrollTo(0,0);}
 function dotsEl(day){
   return el('span',{class:'dots'},HABITS.map(hb=>el('span',{class:'dot'+(day[hb.key].done?' on':'')},el('span',{class:'sr',text:hb.label+(day[hb.key].done?' done':' not done')}))));
 }
+/* ---------- week: month at a glance ---------- */
+function setupMonthGlance(){
+  const view=$('view-week');
+  const seg=el('div',{class:'seg2',role:'group','aria-label':'Show'},
+    el('button',{type:'button',id:'wm-week','aria-pressed':'true',onclick:()=>setWeekMode('week')},'Week'),
+    el('button',{type:'button',id:'wm-month','aria-pressed':'false',onclick:()=>setWeekMode('month')},'Month'));
+  const box=el('div',{class:'view',id:'monthGlance',hidden:true});
+  view.prepend(seg);
+  view.append(box);
+}
+function setWeekMode(m){
+  S.weekMode=m;
+  if(m==='month'&&!S.glanceMonth) S.glanceMonth=monthOf(parseKey(S.weekSel));
+  renderWeek();
+}
+function renderMonthGlance(){
+  const box=$('monthGlance');
+  if(!box) return;
+  const mk=S.glanceMonth||monthOf(new Date()),p=mk.split('-').map(Number);
+  const first=new Date(p[0],p[1]-1,1),last=new Date(p[0],p[1],0),t=todayKey(),cur=mondayOf(t);
+  const m=eff();
+  const shift=d=>{S.glanceMonth=monthOf(new Date(p[0],p[1]-1+d,1));renderMonthGlance();};
+  const nav=el('div',{class:'datenav'},
+    el('button',{type:'button',class:'icon','aria-label':'Previous month',onclick:()=>shift(-1)},svg(ICON_LEFT)),
+    el('div',{class:'datetext'},el('h2',{text:first.toLocaleDateString(undefined,{month:'long',year:'numeric'})}),el('p',{text:'Each week at a glance. Tap a week to open it.'})),
+    el('button',{type:'button',class:'icon','aria-label':'Next month',disabled:mk>=monthOf(addDays(parseKey(cur),7)),onclick:()=>shift(1)},svg(ICON_RIGHT)));
+  const rows=[];
+  for(let wk=mondayOf(keyOf(first));parseKey(wk)<=last;wk=keyOf(addDays(parseKey(wk),7))){
+    const w=weekDoc(wk)||{},later=wk>cur;
+    let read=0;
+    for(let i=0;i<7;i++){const day=m[keyOf(addDays(parseKey(wk),i))];if(day&&day.bible.done) read++;}
+    const chip=(on,val,label)=>el('span',{class:'mchip'+(on?' on':'')},el('b',{text:val}),label);
+    const meet=(att,prep)=>att?'✓':prep?'Prep':'–';
+    const k=wk;
+    rows.push(el('button',{type:'button',class:'mweek'+(wk===cur?' now':'')+(later?' later':''),onclick:()=>{S.weekMode='week';goWeek(k);}},
+      el('span',{class:'mtop'},el('b',{text:fmtShort(parseKey(wk))+' – '+fmtShort(addDays(parseKey(wk),6))+(wk===cur?' · this week':'')}),
+        el('span',{text:nz(w.myReading)?nz(w.myReading)+(later?' planned':''):(later?'Not planned yet':'')})),
+      el('span',{class:'mchips'},
+        chip(read>0,later?'–':read+'/7','Reading'),
+        chip(!!(w.mwAttend||w.mwPrep),meet(w.mwAttend,w.mwPrep),'Midweek'),
+        chip(!!(w.weAttend||w.wtPrep),meet(w.weAttend,w.wtPrep),'Weekend'),
+        chip(!!w.ministry,w.ministry?'✓':'–','Ministry'))));
+  }
+  const mn=(MIN.draft&&MIN.id===mk)?MIN.draft:(MIN.map[mk]||{});
+  const days=Object.keys(m).filter(k=>k.slice(0,7)===mk&&k<=t);
+  const dtDays=days.filter(k=>m[k].text.done).length;
+  const soFar=Math.min(last.getDate(),t.slice(0,7)===mk?Number(t.slice(8,10)):last.getDate());
+  const chapters=days.filter(k=>m[k].bible.done).reduce((a,k)=>a+refChapters(m[k].bible.ref).length,0);
+  const row=(l,v,warn)=>el('div',{class:'stat'},el('span',{text:l}),el('b',{text:v,style:warn?'color:var(--gold)':null}));
+  const future=mk>monthOf(new Date());
+  box.replaceChildren(nav,...rows,
+    future?null:el('section',{class:'rtcard'},
+      el('p',{style:'margin:0;font:700 18px/1.2 var(--font-display)',text:'For your '+first.toLocaleDateString(undefined,{month:'long'})+' report'}),
+      row('Shared in the ministry',mn.shared?'Yes':'Not yet',!mn.shared),
+      row('Bible studies',nz(mn.studies)||'0'),
+      nz(mn.hours)?row('Hours',nz(mn.hours)):null,
+      row('Report turned in',mn.reported?'Yes':'Not yet',!mn.reported),
+      row('Daily text days',dtDays+' of '+(mk<monthOf(new Date())?last.getDate():soFar)),
+      row('Bible chapters read',String(chapters))));
+}
 function renderWeek(){
+  const month=S.weekMode==='month';
+  if($('wm-week')){$('wm-week').setAttribute('aria-pressed',String(!month));$('wm-month').setAttribute('aria-pressed',String(month));}
+  if($('monthGlance')) $('monthGlance').hidden=!month;
+  $('view-week').querySelector('.datenav').hidden=month;
+  $('weekForm').hidden=month;
+  if(month){renderMonthGlance();return;}
   const s=parseKey(S.weekSel),e=addDays(s,6);
   $('weekTitle').textContent=fmtShort(s)+' to '+fmtShort(e);
   const cur=mondayOf(todayKey());
@@ -1547,7 +1628,7 @@ function planStart(weekStart){
 function suggestReading(weekStart){
   const g0=planStart(weekStart);
   if(g0>=TOTAL_CH) return null;
-  const n=planPace(weekStart);
+  const n=goalPace(weekStart)||planPace(weekStart);
   const lo=Math.max(2,Math.round(n*0.6)),hi=Math.max(lo,Math.round(n*1.5));
   let best=null;
   for(let L=lo;L<=hi&&g0+L<=TOTAL_CH;L++){
@@ -1626,7 +1707,7 @@ function renderPlanBox(){
 }
 
 function normBible(v){
-  const o={read:{},rounds:Number(v&&v.rounds)||0,updatedAt:Number(v&&v.updatedAt)||0};
+  const o={read:{},rounds:Number(v&&v.rounds)||0,updatedAt:Number(v&&v.updatedAt)||0,goal:/^\d{4}-12-31$/.test(String(v&&v.goal||''))?v.goal:''};
   const r=(v&&v.read)||{};
   BOOKS.forEach((b,i)=>{
     const a=Array.isArray(r[String(i)])?r[String(i)]:[];
@@ -1658,16 +1739,78 @@ function newRound(){
   saveBible();
   renderBible();
 }
+/* ---------- read-through: where you are and when you'll finish ---------- */
+const WEEK_MS=7*86400000;
+/* reading goes in order, so "where you are" is the furthest chapter marked read */
+function furthestRead(){for(let g=TOTAL_CH-1;g>=0;g--) if(isRead(g)) return g;return -1;}
+function firstUnread(){for(let g=furthestRead()+1;g<TOTAL_CH;g++) if(!isRead(g)) return g;return TOTAL_CH;}
+/* chapters a week needed to finish by the goal date, or 0 when there is no goal */
+function goalPace(fromWeek){
+  const goal=S.bible.goal;
+  if(!goal) return 0;
+  const left=TOTAL_CH-countRead();
+  const weeks=Math.max(1,(new Date(goal+'T23:59:59')-parseKey(fromWeek||mondayOf(todayKey())))/WEEK_MS);
+  return left>0?Math.ceil(left/weeks):0;
+}
+function finishDate(pace){
+  const left=TOTAL_CH-countRead();
+  if(left<=0||!pace) return null;
+  return new Date(Date.now()+Math.ceil(left/pace)*WEEK_MS);
+}
+function hadPlans(){
+  for(let i=1;i<=6;i++){const w=weekDoc(keyOf(addDays(parseKey(mondayOf(todayKey())),-7*i)));if(w&&refChapters(w.myReading||'').length) return true;}
+  return false;
+}
+function renderFinish(box){
+  const total=countRead(),pct=total/TOTAL_CH*100;
+  const nxt=firstUnread();
+  const pace=planPace(mondayOf(todayKey())),guess=!hadPlans();
+  const when=finishDate(pace);
+  const monthYear=d=>d.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const where=total===0?'Start with Genesis 1.':nxt>=TOTAL_CH?'You have read every chapter.':(furthestRead()>=0?'You\'re in '+rangeLabel(furthestRead(),furthestRead())+'. ':'')+'Next up: '+rangeLabel(nxt,nxt)+'.';
+  box.append(el('section',{class:'rtcard'},
+    el('p',{class:'cap',text:'Reading the whole Bible'}),
+    el('p',{class:'rtbig'},String(total)+' ',el('small',{text:'of '+TOTAL_CH.toLocaleString()+' chapters'})),
+    el('div',{class:'pbar big',role:'img','aria-label':Math.round(pct)+' percent read'},el('i',{style:'width:'+Math.max(pct,total?0.8:0)+'%'})),
+    el('p',{style:'margin:0',text:where+(S.bible.rounds?' Read-throughs finished: '+S.bible.rounds+'.':'')})));
+  if(total<TOTAL_CH){
+    const y=new Date().getFullYear();
+    const sel=el('select',{id:'rtgoal'},[['','No goal']].concat([0,1,2,3,4].map(i=>[(y+i)+'-12-31','End of '+(y+i)])).map(o=>el('option',{value:o[0],text:o[1]})));
+    sel.value=S.bible.goal||'';
+    sel.addEventListener('change',()=>{S.bible.goal=sel.value;saveBible();renderBible();});
+    const need=goalPace();
+    box.append(el('section',{class:'rtcard key'},
+      el('p',{class:'cap',text:'When you\'ll finish'}),
+      el('p',{class:'rtwhen',text:when?'Around '+monthYear(when):'Keep reading to see a date'}),
+      el('p',{class:'hint',text:guess?'Based on about 6 chapters a week, a starting guess. Plan a few weeks under Week, My Bible reading, and this will use your real pace.'
+        :'At your pace of about '+Math.round(pace)+' chapters a week, from your last few planned weeks.'}),
+      el('div',{class:'field'},el('label',{for:'rtgoal',text:'Want to finish by a certain date?'}),sel),
+      S.bible.goal?el('div',{class:'rtnote'},'To finish by the ',el('b',{text:'end of '+S.bible.goal.slice(0,4)}),', read about ',el('b',{text:need+' chapters a week'}),
+        ', roughly '+(need/7<1?'1 a day on most days':Math.floor(need/7)+(need%7?' to '+Math.ceil(need/7):'')+' a day')+'. Next week\'s suggested reading grows to match.'):null));
+  }
+  const otRead=BOOKS.slice(0,NT_START).reduce((a,b,i)=>a+(S.bible.read[String(i)]||[]).length,0);
+  const otTotal=CH_START[NT_START];
+  box.append(el('section',{class:'rtcard'},el('p',{class:'cap',text:'By section'}),
+    el('div',{class:'stat'},el('span',{text:'Hebrew-Aramaic Scriptures'}),el('b',{text:otRead+' / '+otTotal})),
+    el('div',{class:'pbar'},el('i',{style:'width:'+(100*otRead/otTotal)+'%'})),
+    el('div',{class:'stat'},el('span',{text:'Christian Greek Scriptures'}),el('b',{text:(total-otRead)+' / '+(TOTAL_CH-otTotal)})),
+    el('div',{class:'pbar'},el('i',{style:'width:'+(100*(total-otRead)/(TOTAL_CH-otTotal))+'%'}))));
+  const recent=[];
+  for(let i=0;i<8&&recent.length<3;i++){
+    const k=keyOf(addDays(parseKey(mondayOf(todayKey())),-7*i)),w=weekDoc(k),chs=w?refChapters(w.myReading||''):[];
+    if(chs.length) recent.push(el('div',{class:'stat'},el('span',{text:fmtShort(parseKey(k))+' – '+fmtShort(addDays(parseKey(k),6))}),
+      el('span',{text:nz(w.myReading)+' · '+chs.filter(isRead).length+' of '+chs.length})));
+  }
+  if(recent.length) box.append(el('section',{class:'rtcard'},el('p',{class:'cap',text:'Recent weeks'}),recent));
+}
 function renderBible(){
   const box=B.ui;
   if(!box) return;
   box.replaceChildren();
   if(B.open!==null){renderBook(box);return;}
   const total=countRead();
-  const pct=Math.round(100*total/TOTAL_CH);
-  box.append(el('h2',{class:'sect',text:'Bible read-through'}),
-    el('div',{class:'pbar',role:'img','aria-label':pct+' percent read'},el('i',{style:'width:'+pct+'%'})),
-    el('p',{class:'hint',text:total+' of '+TOTAL_CH+' chapters ('+pct+'%)'+(S.bible.rounds?'. Read-throughs finished: '+S.bible.rounds:'')}));
+  box.append(el('h2',{class:'sect',text:'Bible read-through'}));
+  renderFinish(box);
   if(total===TOTAL_CH) box.append(el('div',{class:'actions'},el('button',{type:'button',class:'btn',onclick:newRound},'Start a new read-through')));
   box.append(el('div',{class:'subtabs'},[['ot','Hebrew-Aramaic Scriptures'],['nt','Christian Greek Scriptures']].map(s=>el('button',{type:'button',class:'pill','aria-pressed':String(B.sec===s[0]),onclick:()=>{B.sec=s[0];renderBible();}},s[1]))));
   const from=B.sec==='ot'?0:NT_START,to=B.sec==='ot'?NT_START:BOOKS.length;
@@ -2188,6 +2331,71 @@ function dailyTextSection(){
     el('p',{class:'hint',text:'Need the file? Open the book on jw.org, tap the download button, and choose EPUB. Then come back and load it here.'}),
     getLinks);
 }
+/* ---------- display: appearance, text size, home screen name and icon ---------- */
+const APP_NAMES=['Study Log','My Study','Daily Study','Bible Study'];
+const APP_ICONS={
+  book:{label:'Open Bible',src:'apple-touch-icon.png'},
+  lamp:{label:'Lamp',bg:'#8F5609',path:'M12 3c2 3 3 5 3 7a3 3 0 0 1-6 0c0-2 1-4 3-7zM8 16h8l-1 5H9z'},
+  notebook:{label:'Notebook',bg:'#14262B',path:'M6 4h10a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2zM6 18a2 2 0 0 1 2-2h10M9.5 8h5M9.5 11h5'}
+};
+const iconCache={};
+/* draws an icon as a PNG (iPhone home screens need PNG, not SVG) */
+function iconPNG(key,size){
+  const ic=APP_ICONS[key];
+  if(!ic||ic.src) return ic?new URL(ic.src,location.href).href:'';
+  const ck=key+size;
+  if(iconCache[ck]) return iconCache[ck];
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const x=c.getContext('2d');
+  x.fillStyle=ic.bg;x.fillRect(0,0,size,size);
+  const k=size/24*0.62;
+  x.translate(size/2-12*k,size/2-12*k);x.scale(k,k);
+  x.strokeStyle='#FFFFFF';x.lineWidth=1.6;x.lineCap='round';x.lineJoin='round';
+  x.stroke(new Path2D(ic.path));
+  return (iconCache[ck]=c.toDataURL('image/png'));
+}
+let manifestURL='';
+function applyDisplay(){
+  const st=window.DSL.settings,root=document.documentElement;
+  if(st.theme==='light'||st.theme==='dark') root.dataset.theme=st.theme; else delete root.dataset.theme;
+  const dark=st.theme==='dark'||(st.theme!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{m.content=dark?'#0E1618':'#F2F5F4';m.removeAttribute('media');});
+  document.body.style.zoom=st.textSize==='s'?'0.92':st.textSize==='l'?'1.12':'';
+  const name=APP_NAMES.indexOf(st.appName)>=0?st.appName:'Study Log';
+  const icon=APP_ICONS[st.appIcon]?st.appIcon:'book';
+  document.title=name;
+  const tm=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(tm) tm.content=name;
+  const touch=document.querySelector('link[rel="apple-touch-icon"]');if(touch) touch.href=icon==='book'?'apple-touch-icon.png':iconPNG(icon,180);
+  if(name!=='Study Log'||icon!=='book'){
+    const base=new URL('./',location.href).href;
+    const icons=icon==='book'?[{src:base+'icon-192.png',sizes:'192x192',type:'image/png'},{src:base+'icon-512.png',sizes:'512x512',type:'image/png'}]
+      :[{src:iconPNG(icon,192),sizes:'192x192',type:'image/png'},{src:iconPNG(icon,512),sizes:'512x512',type:'image/png'}];
+    const blob=new Blob([JSON.stringify({name:name,short_name:name,start_url:base,scope:base,display:'standalone',background_color:'#F2F5F4',theme_color:'#1D6B68',icons:icons})],{type:'application/manifest+json'});
+    if(manifestURL) URL.revokeObjectURL(manifestURL);
+    manifestURL=URL.createObjectURL(blob);
+    const ml=document.querySelector('link[rel="manifest"]');if(ml) ml.href=manifestURL;
+  }
+}
+function displaySection(D){
+  const msg=el('p',{class:'hint',role:'status'});
+  const save=patch=>{if(!D.saveSettings(patch)) msg.textContent='Could not save this setting on this device.';applyDisplay();renderSettings();};
+  const seg=(label,key,opts,cur)=>el('div',{class:'field'},el('p',{class:'boxlabel',text:label}),
+    el('div',{class:'seg3',role:'group','aria-label':label},opts.map(o=>el('button',{type:'button','aria-pressed':String(cur===o[0]),style:o[2]||null,onclick:()=>save({[key]:o[0]})},o[1]))));
+  const st=D.settings;
+  const name=el('select',{id:'s-appname'},APP_NAMES.map(n=>el('option',{value:n,text:n})));
+  name.value=APP_NAMES.indexOf(st.appName)>=0?st.appName:'Study Log';
+  name.addEventListener('change',()=>save({appName:name.value}));
+  const icon=APP_ICONS[st.appIcon]?st.appIcon:'book';
+  return el('section',{class:'setsec'},
+    el('h3',{text:'Look and feel'}),
+    seg('Appearance','theme',[['auto','Match phone'],['light','Light'],['dark','Dark']],st.theme==='light'||st.theme==='dark'?st.theme:'auto'),
+    seg('Text size','textSize',[['s','Small','font-size:14px'],['m','Medium','font-size:16px'],['l','Large','font-size:19px']],st.textSize==='s'||st.textSize==='l'?st.textSize:'m'),
+    el('div',{class:'field'},el('label',{for:'s-appname',text:'Name under the home screen icon'}),name),
+    el('div',{class:'field'},el('p',{class:'boxlabel',text:'Home screen icon'}),
+      el('div',{class:'iconpick',role:'group','aria-label':'Home screen icon'},Object.keys(APP_ICONS).map(k=>
+        el('button',{type:'button','aria-pressed':String(icon===k),onclick:()=>save({appIcon:k})},el('img',{src:iconPNG(k,112),alt:''}),APP_ICONS[k].label)))),
+    el('p',{class:'hint',text:'On iPhone, a new name or icon shows after you remove the app from your home screen and add it again. Your notes stay safe.'}),msg);
+}
 function weekSection(D){
   const cb=el('input',{type:'checkbox',id:'s-family'});
   cb.checked=D.settings.showFamily!==false;
@@ -2209,7 +2417,7 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
+    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -2332,6 +2540,7 @@ async function dtLoadAll(){
   }catch(e){}
   DT.ready=true;
   renderDailyCard();
+  paintHabits();
   paintDtHints();
   renderHome();
 }
@@ -2479,14 +2688,58 @@ function paintDtHints(){
   if(lk) lk.href=libraryHref(draft.date);
   const d=dtFor(draft.date);
   const r=$('d-text-ref'),v=$('d-text-vtext');
-  if(r) r.placeholder=d?d.ref:'For example, Psalm 37:4';
-  if(v) v.placeholder=d?(d.full||d.quote):'The verse, typed or pasted';
+  if(r) r.placeholder='For example, Psalm 37:4';
+  if(v) v.placeholder=d?dtLine(d):'The scripture, typed or pasted';
+  const x=$('dtExtra');
+  if(x){
+    const kids=[];
+    if(d){
+      const code=bibleCode(d.ref);
+      if(code) kids.push(el('div',{class:'reflinks'},el('a',{class:'reflink',href:'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+code},'Open '+d.ref+' in JW Library')));
+      if(d.full) kids.push(el('details',{class:'dtfull'},el('summary',{text:'Show the full verse'}),el('p',{},el('b',{text:d.ref+' '}),d.full)));
+    }
+    x.replaceChildren(...kids);
+  }
+  renderTodayChapters();
 }
+/* Bible reading: today's planned chapters, each with a box to tick and a link into JW Library.
+   Ticking them all checks off Bible reading for the day. */
+function chapterHref(g){const p=gPos(g);return 'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+String(p.bi+1).padStart(2,'0')+String(p.ch).padStart(3,'0')+'001';}
+function todayChapters(k){
+  const wk=mondayOf(k),w=weekDoc(wk);
+  if(!w||!nz(w.myReading)) return [];
+  const day=planDays(wk,w.myReading).find(x=>x.k===k);
+  return day?day.chs:[];
+}
+function renderTodayChapters(){
+  const box=$('todayCh');
+  if(!box) return;
+  const chs=todayChapters(draft.date);
+  if(!chs.length){box.replaceChildren();return;}
+  box.replaceChildren(el('p',{class:'boxlabel',text:"Today's chapters"}),
+    el('div',{class:'todaych'},chs.map(g=>{
+      const id='tch-'+g,cb=el('input',{type:'checkbox',id:id});
+      cb.checked=isRead(g);
+      cb.addEventListener('change',()=>{
+        const p=gPos(g),set=new Set(S.bible.read[String(p.bi)]||[]);
+        if(cb.checked) set.add(p.ch); else set.delete(p.ch);
+        if(set.size) S.bible.read[String(p.bi)]=Array.from(set).sort((a,b)=>a-b); else delete S.bible.read[String(p.bi)];
+        saveBible();
+        if(chs.every(isRead)&&!draft.bible.done){
+          draft.bible.done=true;
+          if(!draft.bible.ref.trim()) draft.bible.ref=rangeLabel(chs[0],chs[chs.length-1]);
+          touchDay();paintHabits();renderProgress();renderStreaks();
+        }
+      });
+      return el('div',{class:'chrow'},cb,el('label',{for:id,text:rangeLabel(g,g)}),el('a',{class:'reflink',href:chapterHref(g)},'Open'));
+    })));
+}
+const dtLine=d=>d.quote+'—'+d.ref+(/[.!?]$/.test(d.ref)?'':'.');
 function fillDtScripture(){
   const d=dtFor(draft.date),t=draft.text;
-  if(!d||t.ref.trim()||t.vtext.trim()) return false;
-  t.ref=d.ref;
-  t.vtext=d.full||d.quote;
+  if(!d||t.vtext.trim()) return false;
+  if(!t.ref.trim()) t.ref=d.ref;
+  t.vtext=dtLine(d);
   return true;
 }
 
@@ -2979,7 +3232,11 @@ MO.build($('monthForm'));
 WK.load(S.weekSel);
 MIN.load(minMonth());
 MO.load(S.monthSel);
+WIDE.addEventListener('change',()=>paintHabits());
+applyDisplay();
+if(window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyDisplay);
 setupFormatting();
+setupMonthGlance();
 dtLoadAll();
 buildHabits();
 initStudySpace();

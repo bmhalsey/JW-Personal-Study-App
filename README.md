@@ -14,6 +14,15 @@ python3 -m http.server 8000 --bind 127.0.0.1
 - **Connected thoughts** links entries and shows incoming links. **Search everything** (or Ctrl/Cmd+K) searches daily studies, library entries, weekly/monthly notes, ministry notes, and quiz results.
 - Streaks and daily completion tracking are shown by default; either can be turned off in Settings.
 
+## Daily text, reading and display
+
+- With the daily text EPUB loaded, the Daily text Scripture box fills in the day's text the way the book writes it (for example "He honors those fearing Jehovah.—Ps. 15:4."), with the full verse one tap away.
+- Bible reading lists today's planned chapters with JW Library links; ticking them all checks off the day.
+- Read-through shows how far you are, an estimated finish date at your pace, and an optional finish-by goal that also sets next week's suggested reading.
+- Week has a Month view: each week at a glance plus the numbers for your monthly report.
+- Settings, Look and feel: Match phone / Light / Dark, text size, and the home screen name and icon.
+- On a computer, Today shows the daily text on the left and one section to write in on the right.
+
 ## Saving and recovery
 
 Local notes save automatically to this browser. Keep backups outside the browser: clearing site data removes local notes and pending changes.

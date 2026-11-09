@@ -27,15 +27,26 @@
   --radius:10px;
   color-scheme:light dark;
 }
+/* Dark colors: used when the phone is in dark mode, unless Settings says Light,
+   or always when Settings says Dark. Borders are a step brighter than before so boxes
+   and text fields stay visible on the dark background. */
 @media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0E1618; --surface:#162226; --sunken:#1C2B30; --fg:#E3ECEA; --muted:#93A7AA;
-    --line:#2B3C41; --line-strong:#5E777C;
-    --accent:#5CC7BE; --accent-fg:#06201F; --gold:#E5B455; --danger:#F08A80;
+  :root:not([data-theme="light"]){
+    --bg:#0E1618; --surface:#162226; --sunken:#1F3035; --fg:#E3ECEA; --muted:#A3B5B8;
+    --line:#34484E; --line-strong:#6C868B;
+    --accent:#5CC7BE; --accent-fg:#06201F; --gold:#E9BC62; --danger:#F08A80;
     --heat1:#1F4A48; --heat2:#2A706B; --shadow:rgba(0,0,0,.5);
     color-scheme:dark;
   }
 }
+:root[data-theme="dark"]{
+  --bg:#0E1618; --surface:#162226; --sunken:#1F3035; --fg:#E3ECEA; --muted:#A3B5B8;
+  --line:#34484E; --line-strong:#6C868B;
+  --accent:#5CC7BE; --accent-fg:#06201F; --gold:#E9BC62; --danger:#F08A80;
+  --heat1:#1F4A48; --heat2:#2A706B; --shadow:rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{color-scheme:light}
 html{background:var(--bg)}
 body{
   margin:0; background:var(--bg); color:var(--fg);
@@ -280,6 +291,53 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .pdone.on{color:var(--accent);font-weight:600}
 .pdone svg{width:16px;height:16px}
 
+/* daily text: the day's scripture, its full verse, and today's chapters */
+.dtfull{border:1px solid var(--line);border-radius:8px;padding:0 12px;background:var(--surface)}
+.dtfull summary{min-height:40px;font-size:14px;font-weight:600;color:var(--accent)}
+.dtfull[open] summary{margin-bottom:6px}
+.dtfull p{margin:0 0 10px;font-size:15px}
+.todaych{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.chrow{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid var(--line)}
+.chrow input{width:22px;height:22px;margin:0;flex:none;accent-color:var(--accent)}
+.chrow label{flex:1;font-size:16px}
+.chrow .reflink{min-height:34px}
+
+/* read-through: finish date */
+.rtcard{display:flex;flex-direction:column;gap:10px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.rtcard.key{border:2px solid var(--accent)}
+.rtbig{margin:0;font:700 32px/1.1 var(--font-display)}
+.rtbig small{font-size:17px;font-weight:600;color:var(--muted)}
+.rtwhen{margin:0;font:700 24px/1.2 var(--font-display)}
+.rtnote{padding:12px;border-radius:10px;background:var(--sunken);font-size:15px}
+
+/* week: month at a glance */
+.seg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
+.seg2 button{border:0;min-height:40px;border-radius:9px;font:600 15px var(--font-body);background:transparent;color:var(--muted);cursor:pointer}
+.seg2 button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px var(--shadow)}
+.mweek{display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.mweek.now{border:2px solid var(--accent)}
+.mweek.later{opacity:.65}
+.mtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mtop b{font:600 16px/1.2 var(--font-display)}
+.mtop span{font-size:13px;color:var(--muted);text-align:right}
+.mchips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mchip{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:8px;background:var(--sunken);font-size:11px;font-weight:600;color:var(--muted);text-align:center}
+.mchip b{font-size:15px}
+.mchip.on{background:var(--heat1);color:var(--fg)}
+.mchip.on b{color:var(--accent)}
+
+/* settings: text size, appearance, name and icon */
+.seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
+.seg3 button{border:0;min-height:44px;border-radius:9px;font:600 15px var(--font-body);background:transparent;color:var(--muted);cursor:pointer}
+.seg3 button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px var(--shadow)}
+.iconpick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.iconpick button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--fg);font:600 13px var(--font-body);cursor:pointer}
+.iconpick button[aria-pressed="true"]{border:2px solid var(--accent)}
+.iconpick img{width:56px;height:56px;border-radius:13px;box-shadow:0 0 0 1px var(--line-strong)}
+
+/* computer: which section the writing panel shows */
+#habitTabs{display:none}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}
@@ -387,7 +445,10 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 main{min-width:0}
 .search-dialog,.writing-dialog{box-sizing:border-box;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--fg);padding:28px;width:min(960px,calc(100% - 32px));max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain}
 body:has(dialog[open]){overflow:hidden}
-dialog::backdrop{background:rgba(12,33,33,.58);backdrop-filter:blur(4px)}
+dialog::backdrop{background:rgba(6,16,18,.66);backdrop-filter:blur(4px)}
+/* text fields sit on a slightly different shade than their card in both themes */
+input[type=text],input[type=search],input[type=password],textarea,select{border-color:var(--line-strong)}
+.wcard input,.wcard textarea,.wcard select,.habit input,.habit textarea,.setsec input,.setsec textarea,.setsec select{background:var(--bg)}
 .search-dialog .bar{justify-content:space-between}.search-dialog h2{margin:0}.search-dialog input{width:100%;margin-top:20px}
 .writing-dialog{width:min(960px,calc(100% - 40px))}.writing-dialog.expanded{width:calc(100% - 40px);max-width:1400px}
 .writing-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:-28px;background:var(--bg);padding:12px 0;z-index:4;border-bottom:1px solid var(--line)}
@@ -410,10 +471,21 @@ input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:tr
  .wrap>section[aria-label="Current streaks"]{grid-column:1;grid-row:3}
  .tabs{grid-row:4}
  main{grid-row:2 / span 4}
- #view-today{display:flex;flex-direction:column;gap:20px}#view-today>*{width:100%;box-sizing:border-box}
- #view-today>.datenav{order:-1}#view-today>#habits{width:100%}
- #habits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
- .habit{display:flex;flex-direction:column;justify-content:space-between}.habit-head{grid-template-columns:auto minmax(0,1fr);padding:20px}.habit-head>.btn{grid-column:2;justify-self:start}#habits{align-items:stretch}
+ /* Today: read on the left (daily text, progress); write on the right, one section at a time */
+ #view-today{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:28px;row-gap:16px;align-items:start}
+ #view-today>*{grid-column:1;min-width:0}
+ #view-today>#habitTabs{display:grid;grid-column:2;grid-row:1}
+ #view-today>#habits{grid-column:2;grid-row:2 / span 40;display:flex;flex-direction:column;gap:12px}
+ #habitTabs{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
+ #habitTabs button{border:0;min-height:44px;border-radius:9px;font:600 15px var(--font-body);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+ #habitTabs button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px var(--shadow)}
+ #habitTabs .done-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+ #habits>.habit.desk-off{display:none}
+ #habits>.habit{padding-bottom:4px}
+ .habit-head{padding:18px 20px}
+ .habit-details>.toggle{display:none}
+ .habit-body{padding:4px 20px 20px}
+ .dtquote{font-size:32px}
 }
 @media(max-width:600px){
  .writing-dialog,.search-dialog{border:0;border-radius:0;width:100%;height:100dvh;max-height:100dvh;max-width:none;margin:0;padding:16px}
