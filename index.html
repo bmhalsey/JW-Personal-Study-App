@@ -111,13 +111,14 @@ button,input,textarea,select{font-family:inherit}
 .habit-body{display:flex;flex-direction:column;gap:14px;padding:4px 12px 16px}
 
 .field{display:flex;flex-direction:column;gap:6px}
-.field label{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--muted)}
+.field label{font-size:14px;font-weight:600;letter-spacing:.01em;color:var(--fg)}
 input[type=text],input[type=search],input[type=password],textarea,select{
   width:100%;font:400 16px/1.4 var(--font-body);color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:8px;padding:10px 12px;
 }
 select{min-height:44px}
 textarea{resize:vertical;min-height:84px}
+textarea.fmt{min-height:64px;overflow-y:hidden}
 textarea.tall{min-height:280px}
 ::placeholder{color:var(--muted);opacity:1}
 .checkrow{display:flex;gap:12px;align-items:flex-start;padding:6px 0}
@@ -233,14 +234,45 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .collroot.editing>.listview{display:none}
 .row[aria-current="true"]{background:var(--sunken)}
 
+/* week: at-a-glance tiles */
+.wtiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.wtile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:72px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.wtile:hover:not(:disabled){border-color:var(--line-strong)}
+.wtile:disabled{opacity:.55;cursor:default}
+.wtile.on{background:var(--heat1);border-color:transparent}
+.wt-label{font-size:13px;font-weight:600;color:var(--muted)}
+.wtile.on .wt-label{color:var(--fg)}
+.wt-value{font:700 18px/1.2 var(--font-display)}
+
+/* week: folding cards */
+.wcol{display:flex;flex-direction:column;gap:16px;min-width:0}
+.wcard.collapsible{padding:0;gap:0}
+.wcard-toggle{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:14px 16px;border:0;background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer;border-radius:var(--radius)}
+.wcard-toggle:hover{background:var(--sunken)}
+.wcard-toggle svg{flex:none;color:var(--muted);transition:transform .15s}
+.wcard.open .wcard-toggle svg{transform:rotate(180deg)}
+.wcard-titles{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.wcard-h{font:600 19px/1.2 var(--font-display)}
+.wcard-sum{font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wcard-checks{display:flex;flex-wrap:wrap;gap:0 22px;padding:0 16px 8px}
+.wcard-checks .checkrow{padding:4px 0}
+.wcard-body{display:flex;flex-direction:column;gap:14px;padding:6px 16px 18px;border-top:1px solid var(--line)}
+.wcard-body>.hint:first-child{margin-top:8px}
+
 /* reading plan */
+.planprog{display:flex;align-items:center;gap:12px}
+.pbar.big{flex:1;height:12px;border-radius:6px}
+.planpct{font-size:14px;font-weight:600;white-space:nowrap}
+.planrow.done{background:var(--heat1)}
+.planrow.now{box-shadow:inset 0 0 0 2px var(--accent)}
+.upnext{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 6px;font-size:15px}
+.upnext .link{margin-left:4px}
 .suggest{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:10px;background:var(--sunken)}
 .suggest .cap{margin:0}
 .sugtext{margin:0;font:700 22px/1.2 var(--font-display);color:var(--accent)}
 .planrows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .planrow{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,auto);gap:8px;align-items:center;min-height:44px;padding:8px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--fg);font:15px/1.3 var(--font-body);text-align:left;cursor:pointer}
 .planrow:disabled{cursor:default;opacity:.75}
-.planrow.now{background:var(--sunken)}
 .planrow:not(:disabled):hover{background:var(--sunken)}
 .pday{font-weight:600}
 .pplan{overflow-wrap:anywhere}
@@ -314,16 +346,20 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
   .habit-body{padding:4px 16px 20px}
   .habit-title h3{font-size:20px}
 
-  /* Week: cards in two columns */
-  #weekForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
-  #weekForm>#planCard,#weekForm>.fold,#weekForm>#ministryForm{grid-column:1 / -1}
-  #weekForm>#ministryForm>.wcard{max-width:calc(50% - 10px)}
+  /* Week: reading plan and tiles across the top, meetings on the left, the rest on the right */
+  .datenav{grid-template-columns:auto auto auto;justify-content:center;column-gap:20px}
+  #view-week>.datenav{position:sticky;top:0;z-index:5;padding:10px 0;background:var(--bg)}
+  #weekForm{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:20px;align-items:start}
+  #weekForm>#planCard,#weekForm>#weekTiles{grid-column:1 / -1}
+  .wtiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  #planCard{padding:20px}
   #planCard .planrows{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:0;gap:8px}
-  #planCard .planrow{grid-template-columns:1fr;align-content:start;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:10px}
+  #planCard .planrow{grid-template-columns:1fr;align-content:start;gap:4px;min-height:86px;padding:10px;border:1px solid var(--line);border-radius:10px}
+  #planCard .planrow.done{border-color:transparent}
   #planCard .pdone{justify-self:start;text-align:left}
-  .wcard{padding:18px}
-  .foldbody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;row-gap:14px}
-  .foldbody>.subhead,.foldbody>#weekLog,.foldbody>#weekReview,.foldbody>.checkrow{grid-column:1 / -1}
+  .wcard-toggle{padding:16px 20px}
+  .wcard-checks{padding:0 20px 10px}
+  .wcard-body{padding:8px 20px 20px}
 
   /* Library: list on the left, the open item on the right */
   #libBody .collroot{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:28px;align-items:start}

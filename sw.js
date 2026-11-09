@@ -1,6 +1,6 @@
 /* Keeps the app available offline. Always asks the server for the newest app files first,
    so updates show up the next time the app opens; the saved copy is only used offline. */
-const CACHE='study-log-v5';
+const CACHE='study-log-v6';
 const SHELL=['./','index.html','app.js','adapters.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{

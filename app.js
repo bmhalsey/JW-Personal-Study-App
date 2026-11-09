@@ -41,65 +41,80 @@ const WEEK_SUMMARY=[
 ];
 const FAM_ON=()=>window.DSL.settings.showFamily!==false;
 const PART_TYPES=['Bible reading','Starting a conversation','Following up','Making disciples','Explaining your beliefs','Talk','Other'];
+const nz=v=>String(v||'').trim();
+const lines=v=>nz(v).split('\n').filter(x=>x.trim()).length;
+const joinSum=(parts,empty)=>parts.filter(Boolean).join(' · ')||empty;
+/* Week page. Cards marked collapse fold up to a one-line summary; fields marked head stay
+   visible in the card's header. The two col groups become side-by-side columns on computers. */
 const WEEK_FIELDS=[
   {type:'group',style:'card',id:'planCard',label:'My Bible reading',note:'Your own reading through the Bible. Plan it a week ahead; each day fills in from Today.',fields:[
     {prop:'myReading',label:'Reading for this week',hint:'For example, Genesis 12-17'},
     {type:'slot',id:'planBox'}]},
-  {type:'group',style:'card',label:'This week',note:'Your regular week in one list. Daily text and Bible reading fill in from Today.',fields:[
-    {type:'slot',id:'weekCounts'},
-    {prop:'mwPrep',type:'check',label:'Prepared for the midweek meeting'},
-    {prop:'mwAttend',type:'check',label:'Attended the midweek meeting'},
-    {prop:'wtPrep',type:'check',label:'Prepared the Watchtower Study'},
-    {prop:'weAttend',type:'check',label:'Attended the weekend meeting'},
-    {prop:'ministry',type:'check',label:'Shared in the ministry'},
-    {prop:'family',type:'check',label:'Family Worship',showIf:FAM_ON}]},
-  {type:'group',style:'card',label:'Midweek meeting',note:'Our Christian Life and Ministry. Follow along in the Meeting Workbook.',fields:[
-    {type:'group',style:'sub',label:"Treasures From God's Word",fields:[
-      {prop:'reading',label:'Meeting Workbook Bible reading',hint:'For example, Jeremiah 45-46'},
-      {type:'slot',id:'gemsList'},
-      {prop:'mwGem',label:'The spiritual gem I could share',multi:true}]},
-    {type:'group',style:'sub',label:'Apply Yourself to the Field Ministry',fields:[
-      {prop:'mwHasPart',type:'check',label:'I have an assignment this week'},
-      {type:'group',style:'plain',gid:'part',showIf:d=>!!d.mwHasPart,fields:[
-        {prop:'mwPartType',type:'select',label:'Assignment',options:[['','Choose one']].concat(PART_TYPES.map(x=>[x,x]))},
-        {type:'group',style:'row2',fields:[
-          {prop:'mwPoint',label:'Study point',hint:'Lesson number'},
-          {prop:'mwPartner',label:'Partner',hint:'First name'}]},
-        {prop:'mwPlan',label:'My plan',multi:true,hint:'Setting, opening question, scripture to use'},
-        {prop:'mwPracticed',type:'check',label:'Practiced with my partner'}]}]},
-    {type:'group',style:'sub',label:'Living as Christians',fields:[
-      {prop:'cbs',label:'Congregation Bible Study',hint:'Lesson or chapter'},
-      {prop:'cbsComment',label:'A comment I could give',multi:true,hint:'Paragraph number and the point in your own words'},
-      {prop:'lacNote',label:'Something I want to remember',multi:true}]}]},
-  {type:'group',style:'card',label:'Weekend meeting',fields:[
-    {type:'group',style:'sub',label:'Public talk',fields:[
-      {prop:'talkTitle',label:'Title'},
-      {prop:'talkSpeaker',label:'Speaker and congregation',hint:'Optional'},
-      {prop:'talkPoints',label:'Main points and scriptures',multi:true}]},
-    {type:'group',style:'sub',label:'Watchtower Study',fields:[
-      {prop:'wtArticle',label:'Article',hint:'Title or theme scripture'},
-      {prop:'wtMarked',type:'check',label:'Read it and marked the answers'},
-      {prop:'wtComments',label:'Comments I could give',multi:true,hint:'One per line, starting with the paragraph number'},
-      {prop:'wtTake',label:"What I'll take from it",multi:true}]}]},
-  {type:'group',style:'card',label:'Family Worship',gid:'fam',showIf:FAM_ON,fields:[
-    {prop:'famTopic',label:'What we studied',hint:'A Bible account, a video, a project'},
-    {prop:'famTake',label:'What we took away',multi:true},
-    {prop:'famNext',label:'Idea for next week'}]},
-  {type:'slot',id:'ministryForm'},
-  {type:'group',style:'fold',id:'weekFold',label:'Study goals, weekly summary and review',fields:
-    [{type:'head',label:'Weekly goals'}]
-    .concat(WEEK_GOALS.map((g,i)=>({prop:'g'+i,type:'check',label:g})))
-    .concat([{type:'slot',id:'weekLog'},{type:'head',label:'Weekly summary'}])
-    .concat(WEEK_SUMMARY)
-    .concat([{type:'head',label:'Weekly review'},{type:'slot',id:'weekReview'},{prop:'reviewAns',label:'My answers',multi:true,rows:6}])}
+  {type:'slot',id:'weekTiles'},
+  {type:'group',style:'col',id:'colMain',fields:[
+    {type:'group',style:'card',collapse:true,gid:'mw',label:'Midweek meeting',note:'Our Christian Life and Ministry. Follow along in the Meeting Workbook.',
+      summary:d=>joinSum([nz(d.reading),d.mwGem&&'gem written',d.mwHasPart&&('assignment'+(d.mwPartType?': '+d.mwPartType.toLowerCase():'')),d.cbs&&'CBS '+cut(d.cbs,30),d.cbsComment&&'comment ready'],'Nothing written yet'),
+      fields:[
+      {prop:'mwPrep',type:'check',head:true,label:'Prepared'},
+      {prop:'mwAttend',type:'check',head:true,label:'Attended'},
+      {type:'group',style:'sub',label:"Treasures From God's Word",fields:[
+        {prop:'reading',label:'Meeting Workbook Bible reading',hint:'For example, Jeremiah 45-46'},
+        {type:'slot',id:'gemsList'},
+        {prop:'mwGem',label:'The spiritual gem I could share',multi:true}]},
+      {type:'group',style:'sub',label:'Apply Yourself to the Field Ministry',fields:[
+        {prop:'mwHasPart',type:'check',label:'I have an assignment this week'},
+        {type:'group',style:'plain',gid:'part',showIf:d=>!!d.mwHasPart,fields:[
+          {prop:'mwPartType',type:'select',label:'Assignment',options:[['','Choose one']].concat(PART_TYPES.map(x=>[x,x]))},
+          {type:'group',style:'row2',fields:[
+            {prop:'mwPoint',label:'Study point',hint:'Lesson number'},
+            {prop:'mwPartner',label:'Partner',hint:'First name'}]},
+          {prop:'mwPlan',label:'My plan',multi:true,hint:'Setting, opening question, scripture to use'},
+          {prop:'mwPracticed',type:'check',label:'Practiced with my partner'}]}]},
+      {type:'group',style:'sub',label:'Living as Christians',fields:[
+        {prop:'cbs',label:'Congregation Bible Study',hint:'Lesson or chapter'},
+        {prop:'cbsComment',label:'A comment I could give',multi:true,hint:'Paragraph number and the point in your own words'},
+        {prop:'lacNote',label:'Something I want to remember',multi:true}]}]},
+    {type:'group',style:'card',collapse:true,gid:'we',label:'Weekend meeting',
+      summary:d=>joinSum([d.talkTitle&&'Talk: '+cut(d.talkTitle,40),d.wtArticle&&'Watchtower: '+cut(d.wtArticle,40),d.wtMarked&&'answers marked',lines(d.wtComments)&&lines(d.wtComments)+' comment'+(lines(d.wtComments)===1?'':'s')+' ready'],'Nothing written yet'),
+      fields:[
+      {prop:'wtPrep',type:'check',head:true,label:'Prepared'},
+      {prop:'weAttend',type:'check',head:true,label:'Attended'},
+      {type:'group',style:'sub',label:'Public talk',fields:[
+        {prop:'talkTitle',label:'Title'},
+        {prop:'talkSpeaker',label:'Speaker and congregation',hint:'Optional'},
+        {prop:'talkPoints',label:'Main points and scriptures',multi:true}]},
+      {type:'group',style:'sub',label:'Watchtower Study',fields:[
+        {prop:'wtArticle',label:'Article',hint:'Title or theme scripture'},
+        {prop:'wtMarked',type:'check',label:'Read it and marked the answers'},
+        {prop:'wtComments',label:'Comments I could give',multi:true,hint:'One per line, starting with the paragraph number'},
+        {prop:'wtTake',label:"What I'll take from it",multi:true}]}]}]},
+  {type:'group',style:'col',id:'colSide',fields:[
+    {type:'slot',id:'ministryForm'},
+    {type:'group',style:'card',collapse:true,gid:'fam',label:'Family Worship',showIf:FAM_ON,
+      summary:d=>joinSum([d.famTopic&&cut(d.famTopic,50),d.famNext&&'next week planned'],'Not yet this week'),
+      fields:[
+      {prop:'family',type:'check',head:true,label:'Had it this week'},
+      {prop:'famTopic',label:'What we studied',hint:'A Bible account, a video, a project'},
+      {prop:'famTake',label:'What we took away',multi:true},
+      {prop:'famNext',label:'Idea for next week'}]},
+    {type:'group',style:'card',collapse:true,gid:'rev',label:'Weekly review',
+      summary:d=>{const g=[0,1,2,3].filter(i=>d['g'+i]).length;return joinSum([g+' of 4 goals',WEEK_SUMMARY.some(f=>nz(d[f.prop]))&&'summary started',nz(d.reviewAns)&&'review answered'],'');},
+      fields:
+      [{type:'head',label:'Weekly goals'}]
+      .concat(WEEK_GOALS.map((g,i)=>({prop:'g'+i,type:'check',label:g})))
+      .concat([{type:'slot',id:'weekLog'},{type:'head',label:'Weekly summary'}])
+      .concat(WEEK_SUMMARY)
+      .concat([{type:'head',label:'Review questions'},{type:'slot',id:'weekReview'},{prop:'reviewAns',label:'My answers',multi:true,rows:4}])}]}
 ];
-const MIN_FIELDS=[{type:'group',style:'card',label:'Ministry this month',titleId:'minTitle',note:'What you need for your monthly report.',fields:[
-  {prop:'shared',type:'check',label:'I shared in the ministry this month'},
+const MIN_FIELDS=[{type:'group',style:'card',collapse:true,gid:'min',label:'Ministry this month',titleId:'minTitle',note:'What you need for your monthly report.',
+  summary:d=>joinSum([d.shared&&'shared',nz(d.studies)&&nz(d.studies)+' Bible stud'+(nz(d.studies)==='1'?'y':'ies'),nz(d.hours)&&nz(d.hours)+' hours',lines(d.followups)&&lines(d.followups)+' follow-up'+(lines(d.followups)===1?'':'s'),d.reported&&'report in'],'Nothing yet'),
+  fields:[
+  {prop:'shared',type:'check',head:true,label:'Shared this month'},
+  {prop:'reported',type:'check',head:true,label:'Report turned in'},
   {type:'group',style:'row2',fields:[
     {prop:'studies',label:'Bible studies',inputmode:'numeric'},
     {prop:'hours',label:'Hours',hint:'If you pioneer',inputmode:'decimal'}]},
-  {prop:'followups',label:'Follow-ups to make',multi:true,hint:'What you talked about and what to bring next time. No names or addresses.'},
-  {prop:'reported',type:'check',label:'Report turned in'}]}];
+  {prop:'followups',label:'Follow-ups to make',multi:true,hint:'What you talked about and what to bring next time. No names or addresses.'}]}];
 function flatFields(fs){
   const o=[];
   fs.forEach(f=>{if(f.type==='group') o.push(...flatFields(f.fields)); else if(f.prop) o.push(f);});
@@ -175,9 +190,9 @@ function mkControl(f,idPrefix,onChange){
   }
   let inp;
   if(f.type==='select') inp=el('select',{id:id},f.options.map(o=>el('option',{value:o[0],text:o[1]})));
-  else if(f.multi) inp=el('textarea',{id:id,class:'fmt',rows:f.rows||3,autocomplete:'off',placeholder:f.hint||''});
+  else if(f.multi) inp=el('textarea',{id:id,class:'fmt',rows:f.rows||2,autocomplete:'off',placeholder:f.hint||''});
   else inp=el('input',{type:'text',id:id,autocomplete:'off',placeholder:f.hint||''});
-  if(f.multi&&(f.rows||3)>=10) inp.classList.add('tall');
+  if(f.multi&&(f.rows||2)>=10) inp.classList.add('tall');
   if(f.inputmode) inp.setAttribute('inputmode',f.inputmode);
   const link=f.link?el('div',{class:'reflinks',id:id+'-link',hidden:true}):null;
   inp.addEventListener(f.type==='select'?'change':'input',()=>{
@@ -191,6 +206,19 @@ function mkGroup(f,idPrefix,onChange){
   const kids=f.fields.map(x=>mkControl(x,idPrefix,onChange));
   const gid=f.gid?idPrefix+'-g-'+f.gid:(f.id||null);
   if(f.style==='fold') return el('details',{class:'fold',id:gid},el('summary',{text:f.label}),el('div',{class:'foldbody'},kids));
+  if(f.style==='card'&&f.collapse){
+    const key=idPrefix+'-c-'+f.gid,open=CARD_OPEN.has(key);
+    const headKids=f.fields.filter(x=>x.head).map(x=>mkControl(x,idPrefix,onChange));
+    const body=el('div',{class:'wcard-body',id:key+'-body',hidden:!open},
+      f.note?el('p',{class:'hint',text:f.note}):null,f.fields.filter(x=>!x.head).map(x=>mkControl(x,idPrefix,onChange)));
+    return el('section',{class:'wcard collapsible'+(open?' open':''),id:gid},
+      el('button',{type:'button',class:'wcard-toggle','aria-expanded':String(open),'aria-controls':key+'-body',onclick:()=>toggleCard(key)},
+        el('span',{class:'wcard-titles'},el('span',{class:'wcard-h',id:f.titleId||null,text:f.label}),el('span',{class:'wcard-sum',id:idPrefix+'-gs-'+f.gid})),
+        svg(ICON_DOWN)),
+      headKids.length?el('div',{class:'wcard-checks'},headKids):null,
+      body);
+  }
+  if(f.style==='col') return el('div',{class:'wcol',id:gid},kids);
   if(f.style==='card') return el('section',{class:'wcard',id:gid},
     el('h3',{class:'wcard-h',id:f.titleId||null,text:f.label}),f.note?el('p',{class:'hint',text:f.note}):null,kids);
   if(f.style==='sub') return el('div',{class:'part',id:gid},el('p',{class:'ph',text:f.label}),kids);
@@ -198,10 +226,37 @@ function mkGroup(f,idPrefix,onChange){
   if(f.style==='plain') return el('div',{class:'plainbox',id:gid},kids);
   return el('div',{class:'scripbox',role:'group','aria-label':f.label,id:gid},el('p',{class:'boxlabel','aria-hidden':'true',text:f.label}),kids);
 }
+/* folding cards remember whether they are open for this visit */
+const CARD_OPEN=new Set();
+function toggleCard(key,force){
+  const b=document.getElementById(key+'-body');
+  if(!b) return;
+  const open=force!=null?!!force:b.hidden;
+  b.hidden=!open;
+  if(open) CARD_OPEN.add(key); else CARD_OPEN.delete(key);
+  const sec=b.parentNode;
+  sec.classList.toggle('open',open);
+  sec.querySelector('.wcard-toggle').setAttribute('aria-expanded',String(open));
+  if(open) b.querySelectorAll('textarea').forEach(autoGrow);
+}
+function paintSummaries(fields,idPrefix,d){
+  fields.forEach(f=>{
+    if(f.type!=='group') return;
+    if(f.summary&&f.gid){const n=document.getElementById(idPrefix+'-gs-'+f.gid);if(n) n.textContent=f.summary(d||{});}
+    paintSummaries(f.fields,idPrefix,d);
+  });
+}
+/* text boxes start small and grow with what you write */
+function autoGrow(t){
+  if(!t||t.offsetParent===null) return;
+  t.style.height='auto';
+  t.style.height=Math.min(t.scrollHeight+2,1200)+'px';
+}
 function paintControl(f,idPrefix,value,force,data){
   const d=data||{};
   if(f.type==='group'){
     if(f.showIf&&f.gid){const g=document.getElementById(idPrefix+'-g-'+f.gid);if(g) g.hidden=!f.showIf(d);}
+    if(f.summary&&f.gid){const n=document.getElementById(idPrefix+'-gs-'+f.gid);if(n) n.textContent=f.summary(d);}
     f.fields.forEach(x=>paintControl(x,idPrefix,d[x.prop],force,d));
     return;
   }
@@ -212,6 +267,7 @@ function paintControl(f,idPrefix,value,force,data){
   if(f.type==='check'){i.checked=!!value;return;}
   const v=String(value==null?'':value);
   if((force||i!==document.activeElement)&&i.value!==v) i.value=v;
+  if(i.tagName==='TEXTAREA') autoGrow(i);
   if(f.link){const a=document.getElementById(idPrefix+'-'+f.prop+'-link');if(a) refLink(a,i.value);}
 }
 
@@ -305,6 +361,7 @@ function doneCount(day){return HABITS.filter(hb=>day[hb.key].done).length;}
 function normWeek(v,start){
   const o={start:start,updatedAt:(v&&Number(v.updatedAt))||0};
   WEEK_FLAT.forEach(f=>{o[f.prop]=f.type==='check'?!!(v&&v[f.prop]):String((v&&v[f.prop])||'');});
+  o.ministry=!!(v&&v.ministry);
   o.reviewQs=String((v&&v.reviewQs)||'');
   return o;
 }
@@ -727,6 +784,7 @@ function makeDocForm(key,coll,fields,norm){
       st.draft[prop]=val;
       st.touch();
       if(ff&&(ff.type==='select'||ff.type==='check')) st.paint(false);
+      else paintSummaries(fields,'df-'+key,st.draft);
       if(st.onField) st.onField(prop);
     })));
   };
@@ -765,11 +823,12 @@ function makeDocForm(key,coll,fields,norm){
   return st;
 }
 const WK=makeDocForm('week','weeks',WEEK_FIELDS,normWeek);
-WK.onPaint=()=>{renderWeekReview();renderPlanBox();};
+WK.onPaint=()=>{renderWeekReview();renderPlanBox();renderWeekTiles();};
 WK.onField=p=>{if(p==='myReading') renderPlanBox();};
 const MO=makeDocForm('month','months',MONTH_FIELDS,normMonth);
 const MIN=makeDocForm('min','ministry',MIN_FIELDS,normMin);
 const minMonth=()=>monthOf(parseKey(S.weekSel));
+MIN.onPaint=()=>renderWeekTiles();
 
 /* ---------- streaks ---------- */
 function eff(){const m=Object.assign({},S.days);m[draft.date]=draft;return m;}
@@ -1004,15 +1063,38 @@ function renderWeekExtras(){
     if(day.bible.done) bb++;
     if(day.bible.gems.trim()) gems.push({d:d,k:k,t:day.bible.gems.trim()});
   }
-  const c=$('weekCounts');
-  if(c) c.replaceChildren(el('div',{class:'stats'},
-    el('div',{class:'stat'},el('span',{text:'Daily text'}),el('b',{text:tx+' of 7 days'})),
-    el('div',{class:'stat'},el('span',{text:'Bible reading'}),el('b',{text:bb+' of 7 days'}))));
+  S.weekCounts={tx:tx,bb:bb};
+  renderWeekTiles();
   const g=$('gemsList');
   if(g) g.replaceChildren(gems.length
     ?el('div',{class:'gembox'},el('p',{class:'cap',text:'Gems from your daily reading'}),
       gems.map(x=>el('button',{type:'button',class:'gemrow',onclick:()=>openDay(x.k)},el('b',{text:fmtDay(x.d)+': '}),cut(x.t,160))))
     :el('p',{class:'hint',text:'Spiritual gems you write under Bible reading on Today show up here.'}));
+}
+/* the week at a glance: tap a meeting to open it, tap Ministry or Family Worship to mark it */
+function openCard(key){
+  toggleCard(key,true);
+  const b=document.getElementById(key+'-body');
+  if(b) b.parentNode.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderWeekTiles(){
+  const box=$('weekTiles');
+  if(!box||!WK.draft) return;
+  const d=WK.draft,c=S.weekCounts||{tx:0,bb:0},t=todayKey();
+  const future=S.weekSel>mondayOf(t);
+  const meet=(prep,att)=>att?'Attended':prep?'Prepared':'Not yet';
+  const flip=prop=>()=>{if(!WK.draft) return;WK.draft[prop]=!WK.draft[prop];WK.touch();WK.paint(false);};
+  const tiles=[
+    {label:'Daily text',value:c.tx+'/7',on:c.tx>=7,go:()=>setTab('today')},
+    {label:'Bible reading',value:c.bb+'/7',on:c.bb>=7,go:()=>setTab('today')},
+    {label:'Midweek meeting',value:meet(d.mwPrep,d.mwAttend),on:!!(d.mwPrep||d.mwAttend),go:()=>openCard('df-week-c-mw')},
+    {label:'Weekend meeting',value:meet(d.wtPrep,d.weAttend),on:!!(d.wtPrep||d.weAttend),go:()=>openCard('df-week-c-we')},
+    {label:'Ministry',value:d.ministry?'Shared ✓':'Tap when you go',on:!!d.ministry,go:flip('ministry'),toggle:true}
+  ];
+  if(FAM_ON()) tiles.push({label:'Family Worship',value:d.family?'Done ✓':'Tap when done',on:!!d.family,go:flip('family'),toggle:true});
+  box.replaceChildren(el('div',{class:'wtiles',role:'group','aria-label':'This week at a glance'},tiles.map(x=>
+    el('button',{type:'button',class:'wtile'+(x.on?' on':''),'aria-pressed':x.toggle?String(!!x.on):null,onclick:x.go,disabled:future&&!/meeting/.test(x.label)},
+      el('span',{class:'wt-label',text:x.label}),el('b',{class:'wt-value',text:x.value})))));
 }
 function renderWeekLog(){
   renderWeekExtras();
@@ -1498,18 +1580,27 @@ function renderPlanBox(){
   const chs=refChapters(txt);
   if(!chs.length){box.replaceChildren(el('p',{class:'hint',text:'Write it like "Genesis 12-17" so the app can plan your days.'}));return;}
   const read=chs.filter(isRead).length,pct=Math.round(100*read/chs.length);
-  kids.push(el('div',{class:'pbar',role:'img','aria-label':pct+' percent read'},el('i',{style:'width:'+pct+'%'})),
-    el('p',{class:'hint',text:read+' of '+chs.length+' chapters read'+(read===chs.length?'. Well done!':'')}));
+  kids.push(el('div',{class:'planprog'},
+    el('div',{class:'pbar big',role:'img','aria-label':pct+' percent read'},el('i',{style:'width:'+pct+'%'})),
+    el('span',{class:'planpct',text:read+' of '+chs.length+' chapters'+(read===chs.length?' · done!':'')})));
   const m=eff(),t=todayKey();
   kids.push(el('div',{class:'planrows'},planDays(wk,txt).map(d=>{
     const day=m[d.k],b=day&&day.bible;
     const did=!!(b&&b.done);
     const status=b&&b.ref?b.ref:(did?'Done':(d.k<t?'Not logged':(d.k===t?'Today':'')));
-    return el('button',{type:'button',class:'planrow'+(d.k===t?' now':''),onclick:()=>openDay(d.k),disabled:d.k>t},
+    return el('button',{type:'button',class:'planrow'+(d.k===t?' now':'')+(did?' done':''),onclick:()=>openDay(d.k),disabled:d.k>t},
       el('span',{class:'pday',text:fmtDay(parseKey(d.k))}),
       el('span',{class:'pplan',text:d.label||'Catch up or review'}),
       el('span',{class:'pdone'+(did?' on':'')},did?svg(ICON_CHECK):null,el('span',{text:status})));
   })));
+  /* what comes after this week */
+  const nk=keyOf(addDays(parseKey(wk),7)),nw=weekDoc(nk);
+  const maxWk=keyOf(addDays(parseKey(mondayOf(t)),7));
+  const nextTxt=nw&&nz(nw.myReading);
+  const up=nextTxt?{text:nextTxt,planned:true}:suggestReading(nk);
+  if(up&&up.text) kids.push(el('p',{class:'upnext'},
+    el('span',{text:up.planned?'Next week: ':'Up next: '}),el('b',{text:up.text}),' ',
+    nk<=maxWk?el('button',{type:'button',class:'link',onclick:()=>goWeek(nk)},up.planned?'Open':'Plan next week'):null));
   box.replaceChildren(...kids);
 }
 
@@ -1756,8 +1847,7 @@ function renderSunBanner(){
     el('div',{class:'actions'},
       showReview?el('button',{type:'button',class:'btn',onclick:()=>{
         S.weekSel=wk;setTab('week');
-        const f=$('weekFold');
-        if(f){f.open=true;f.scrollIntoView({block:'start'});}
+        openCard('df-week-c-rev');
       }},'Open this week'):null,
       showPlan?el('button',{type:'button',class:showReview?'btn ghost':'btn',onclick:()=>{S.weekSel=nk;setTab('week');}},'Plan next week'):null));
 }
@@ -2443,6 +2533,8 @@ function setupFormatting(){
       if(a!==target&&!bar.contains(a)) bar.hidden=true;
     },0);
   });
+  document.addEventListener('input',e=>{const t=e.target;if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')) autoGrow(t);});
+  window.addEventListener('resize',()=>document.querySelectorAll('textarea.fmt').forEach(autoGrow));
   /* Enter continues a list; Enter on an empty item ends it */
   document.addEventListener('beforeinput',e=>{
     const ta=e.target;
