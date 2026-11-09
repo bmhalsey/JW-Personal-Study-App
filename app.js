@@ -6,7 +6,7 @@ const HABITS=[
   {key:'text',label:'Daily text',link:true,fields:[
     {type:'group',style:'box',label:'Scripture',fields:[
       {prop:'ref',label:'Scripture reference',bare:true,hint:'For example, Psalm 37:4',link:true,showIf:()=>!dtFor(draft.date)},
-      {prop:'vtext',label:'Scripture',bare:true,multi:true,hint:'The scripture, typed or pasted'},
+      {prop:'vtext',label:'Scripture',bare:true,multi:true,noChips:true,hint:'The scripture, typed or pasted'},
       {type:'slot',id:'dtExtra'}]},
     {prop:'note',label:'Comment',multi:true,rows:4,hint:'The main point of the comments, or your own thoughts'},
     /* older entries may have this; it only shows when it has something in it */
@@ -105,7 +105,8 @@ const WEEK_FIELDS=[
         {prop:'wtArticle',label:'Article',hint:'Title or theme scripture'},
         {prop:'wtMarked',type:'check',label:'Read it and marked the answers'},
         {prop:'wtComments',label:'Comments I could give',multi:true,hint:'One per line, starting with the paragraph number'},
-        {prop:'wtTake',label:"What I'll take from it",multi:true}]}]}]},
+        {prop:'wtTake',label:"What I'll take from it",multi:true}]}]},
+    {type:'slot',id:'meetLink'}]},
   {type:'group',style:'col',id:'colSide',fields:[
     {type:'slot',id:'ministryForm'},
     {type:'group',style:'card',collapse:true,gid:'fam',label:'Family Worship',showIf:FAM_ON,
@@ -287,12 +288,20 @@ function mkControl(f,idPrefix,onChange){
   if(f.multi&&(f.rows||2)>=10) inp.classList.add('tall');
   if(f.inputmode) inp.setAttribute('inputmode',f.inputmode);
   const link=f.link?el('div',{class:'reflinks',id:id+'-link',hidden:true}):null;
+  const chips=f.multi&&!f.noChips?el('div',{class:'refchips',id:id+'-refs',hidden:true}):null;
   inp.addEventListener(f.type==='select'?'change':'input',()=>{
     onChange(f.prop,inp.value,f);
     if(link) refLink(link,inp.value);
+    if(chips) refChips(chips,inp.value);
   });
   const lab=f.bare?el('label',{for:id,class:'sr',text:f.label}):el('label',{for:id,text:f.label});
-  return el('div',{class:'field',id:wid},lab,inp,link);
+  return el('div',{class:'field',id:wid},lab,inp,link,chips);
+}
+/* scriptures typed in a note show underneath it as links into JW Library */
+function refChips(box,value){
+  const seen=new Set(),refs=findRefs(value).filter(r=>!seen.has(r.label)&&seen.add(r.label)).slice(0,8);
+  box.hidden=!refs.length;
+  box.replaceChildren(...refs.map(r=>el('a',{class:'refchip',href:refHref(r)},r.label)));
 }
 function mkGroup(f,idPrefix,onChange){
   const kids=f.fields.map(x=>mkControl(x,idPrefix,onChange));
@@ -362,6 +371,7 @@ function paintControl(f,idPrefix,value,force,data){
   if((force||i!==document.activeElement)&&i.value!==v) i.value=v;
   if(i.tagName==='TEXTAREA') autoGrow(i);
   if(f.link){const a=document.getElementById(idPrefix+'-'+f.prop+'-link');if(a) refLink(a,i.value);}
+  if(f.multi&&!f.noChips){const c=document.getElementById(idPrefix+'-'+f.prop+'-refs');if(c) refChips(c,i.value);}
 }
 
 /* scripture links to the Watchtower Online Library (a link only; nothing is copied from the site) */
@@ -486,7 +496,7 @@ function normQuiz(v,id){
 
 /* ---------- state and saving ---------- */
 const S={root:null,connecting:true,days:{},quizzes:{},sel:todayKey(),weekSel:mondayOf(todayKey()),monthSel:monthOf(new Date()),
-  tab:'today',lib:'questions',rev:'quiz',fresh:false,daysLoaded:false,histLimit:30,hq:'',bible:{read:{},rounds:0,updatedAt:0},mode:'local'};
+  tab:'today',lib:'notes',rev:'quiz',fresh:false,daysLoaded:false,histLimit:30,hq:'',bible:{read:{},rounds:0,updatedAt:0},mode:'local'};
 let draft=normDay(null,S.sel);
 let expanded=new Set();
 const moreOpen=new Set();
@@ -875,10 +885,36 @@ function createItem(key,fields){
   renderLibTabs();
   return doc.id;
 }
+/* Library: four tabs. Scriptures holds the index and the Treasury; Follow-up holds Questions
+   and Prayer. Meeting notes open from the Week tab and Trash from Settings. */
+const LIB_GROUPS=[
+  {id:'notes',label:'Notebook',parts:[['notes','Notebook']]},
+  {id:'scriptures',label:'Scriptures',parts:[['scripidx','In my notes'],['verses','Treasury']]},
+  {id:'followup',label:'Follow-up',parts:[['questions','Questions'],['prayers','Prayer']]},
+  {id:'bible',label:'Read-through',parts:[['bible','Read-through']]}
+];
+const LIB_EXTRA={meetings:['Meeting and talk notes','Back to Week',()=>setTab('week')],trash:['Trash','Back to Settings',()=>setTab('settings')]};
 function renderLibTabs(){
-  const nq=activeItems(COLL.questions).filter(i=>!i.deletedAt&&i.status!=='answered').length;
-  const defs=[['questions','Questions'+(nq?' ('+nq+')':'')],['prayers','Prayer'],['verses','Treasury'],['notes','Notebook'],['meetings','Meetings'],['bible','Read-through'],['trash','Trash']];
-  $('libTabs').replaceChildren(...defs.map(d=>el('button',{type:'button',class:'pill','aria-pressed':String(S.lib===d[0]),onclick:()=>{S.lib=d[0];showLib();}},d[1])));
+  const openQ=activeItems(COLL.questions).filter(i=>i.status!=='answered').length;
+  const openP=activeItems(COLL.prayers).filter(i=>i.status!=='answered').length;
+  const grp=LIB_GROUPS.find(g=>g.parts.some(p=>p[0]===S.lib));
+  $('libTabs').replaceChildren(...LIB_GROUPS.map(g=>el('button',{type:'button',class:'pill','aria-pressed':String(grp===g),
+    onclick:()=>{S.lib=(g.last&&g.parts.some(p=>p[0]===g.last))?g.last:g.parts[0][0];showLib();}},
+    g.label+(g.id==='followup'&&openQ+openP?' ('+(openQ+openP)+')':''))));
+  let sub=$('libSub');
+  if(!sub){sub=el('div',{id:'libSub',class:'subtabs'});$('libTabs').after(sub);}
+  if(LIB_EXTRA[S.lib]){
+    const x=LIB_EXTRA[S.lib];
+    sub.hidden=false;
+    sub.replaceChildren(el('button',{type:'button',class:'link',onclick:x[2]},'← '+x[1]),el('span',{class:'libsubtitle',text:x[0]}));
+    return;
+  }
+  sub.hidden=!grp||grp.parts.length<2;
+  if(grp&&grp.parts.length>1){
+    grp.last=S.lib;
+    sub.replaceChildren(...grp.parts.map(p=>el('button',{type:'button',class:'seg-btn','aria-pressed':String(S.lib===p[0]),onclick:()=>{S.lib=p[0];showLib();}},
+      p[1]+(p[0]==='questions'&&openQ?' ('+openQ+')':p[0]==='prayers'&&openP?' ('+openP+')':''))));
+  }
 }
 function showLib(){
   Object.values(COLL).forEach(commitColl);
@@ -886,8 +922,136 @@ function showLib(){
   Object.keys(COLL).forEach(k=>{COLL[k].ui.root.hidden=k!==S.lib;});
   B.ui.hidden=S.lib!=='bible';
   if($('trashList'))$('trashList').hidden=S.lib!=='trash';
+  if($('scripIndex'))$('scripIndex').hidden=S.lib!=='scripidx';
   if(S.lib==='trash') renderTrash();
+  else if(S.lib==='scripidx') renderScripIndex();
   else if(S.lib==='bible') renderBible(); else renderColl(COLL[S.lib]);
+}
+function openLib(key){S.lib=key;setTab('library');}
+
+/* ---------- scriptures in your notes ---------- */
+/* Finds references like "Gen. 3:15", "Psalm 23", "1 Cor. 13:4-7" in any text */
+const BOOK_ABBR={gen:'Genesis',ex:'Exodus',exod:'Exodus',lev:'Leviticus',num:'Numbers',deut:'Deuteronomy',josh:'Joshua',judg:'Judges',
+  sam:'Samuel',ki:'Kings',kgs:'Kings',chron:'Chronicles',neh:'Nehemiah',esth:'Esther',ps:'Psalms',psa:'Psalms',prov:'Proverbs',eccl:'Ecclesiastes',
+  song:'Song of Solomon',isa:'Isaiah',jer:'Jeremiah',lam:'Lamentations',ezek:'Ezekiel',dan:'Daniel',hos:'Hosea',obad:'Obadiah',mic:'Micah',
+  nah:'Nahum',hab:'Habakkuk',zeph:'Zephaniah',hag:'Haggai',zech:'Zechariah',mal:'Malachi',matt:'Matthew',mt:'Matthew',mk:'Mark',lk:'Luke',jn:'John',
+  rom:'Romans',cor:'Corinthians',gal:'Galatians',eph:'Ephesians',phil:'Philippians',col:'Colossians',thess:'Thessalonians',tim:'Timothy',
+  tit:'Titus',philem:'Philemon',heb:'Hebrews',jas:'James',pet:'Peter',jud:'Jude',rev:'Revelation'};
+const REF_RE=/(^|[^A-Za-z0-9])((?:[1-3]\s?)?[A-Z][a-z]+\.?(?:\s(?:of\s)?Solomon|\sof\sSongs)?)\s(\d{1,3})(?::(\d{1,3})(?:\s?[-–]\s?(\d{1,3}))?(?:,\s?(\d{1,3}))?)?/g;
+function bookFromName(name){
+  const m=String(name).match(/^([1-3])?\s?([A-Za-z][A-Za-z\s]*?)\.?$/);
+  if(!m) return -1;
+  const word=m[2].trim(),key=word.toLowerCase().replace(/\s+/g,'');
+  const full=BOOK_ABBR[key]||BOOK_ABBR[key.replace(/s$/,'')];
+  const tryName=(m[1]?m[1]+' ':'')+(full||word);
+  const i=findBook(tryName);
+  return i;
+}
+function findRefs(text){
+  const out=[],t=String(text||'');
+  REF_RE.lastIndex=0;
+  let m;
+  while((m=REF_RE.exec(t))){
+    const bi=bookFromName(m[2]);
+    if(bi<0) continue;
+    const ch=+m[3];
+    if(ch<1||ch>BOOKS[bi][1]) continue;
+    const v=m[4]?+m[4]:0,v2=m[5]?+m[5]:(m[6]?+m[6]:0);
+    out.push({bi:bi,ch:ch,v:v,v2:v2,label:BOOKS[bi][0]+' '+ch+(v?':'+v+(v2?(m[5]?'-':', ')+v2:''):''),at:m.index+m[1].length});
+  }
+  return out;
+}
+function refHref(r){
+  const c=(ch,v)=>String(r.bi+1).padStart(2,'0')+String(ch).padStart(3,'0')+String(v).padStart(3,'0');
+  return 'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+c(r.ch,r.v||1)+(r.v&&r.v2&&r.v2>r.v?'-'+c(r.ch,r.v2):'');
+}
+/* every reference in every note, with where it came from */
+function scriptureEntries(){
+  const out=[];
+  const add=(text,src,where,title,when,star)=>findRefs(text).forEach(r=>{
+    const s=String(text),a=Math.max(0,r.at-60);
+    out.push(Object.assign(r,{src:src,where:where,title:title,when:when||0,star:!!star,snip:(a?'…':'')+readableSnippet(s.slice(a,r.at+140)).replace(/\s+/g,' ')+(r.at+140<s.length?'…':'')}));
+  });
+  const m=eff();
+  Object.keys(m).forEach(k=>HABITS.forEach(hb=>{
+    const d=m[k][hb.key];
+    TEXTPROPS.forEach(p=>{if(d[p]) add(d[p],{coll:'days',id:k,habit:hb.key},hb.label,fmtDay(parseKey(k)),parseKey(k).getTime());});
+  }));
+  Object.values(COLL).forEach(st=>activeItems(st).forEach(it=>{
+    const title=st.cfg.row(it).title;
+    add(st.cfg.search(it),{coll:st.cfg.coll,id:it.id},st.cfg.key==='verses'?'Treasury':st.cfg.plural,title,it.updatedAt,st.cfg.key==='verses');
+  }));
+  Object.entries(WK.map).forEach(([k,w])=>add(WEEK_FLAT.filter(f=>f.type!=='check').map(f=>w[f.prop]).join('\n'),{coll:'weeks',id:k},'Week',fmtShort(parseKey(k))+' – '+fmtShort(addDays(parseKey(k),6)),parseKey(k).getTime()));
+  return out;
+}
+const SX={book:null,chapter:null,sec:'ot',q:''};
+function renderScripIndex(){
+  let box=$('scripIndex');
+  if(!box){box=el('section',{id:'scripIndex',class:'view'});$('libBody').append(box);}
+  box.hidden=S.lib!=='scripidx';
+  const all=scriptureEntries();
+  if(SX.chapter){renderScripChapter(box,all);return;}
+  const byBook={};
+  all.forEach(e=>{(byBook[e.bi]=byBook[e.bi]||[]).push(e);});
+  const search=el('input',{type:'search',placeholder:'Find a book or verse, like Romans 12','aria-label':'Find a scripture',autocomplete:'off'});
+  search.value=SX.q;
+  search.addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    const r=findRefs(search.value.replace(/^(\w)/,c=>c.toUpperCase()))[0];
+    if(r){SX.book=r.bi;SX.chapter=r.ch;renderScripIndex();}
+  });
+  search.addEventListener('input',()=>{SX.q=search.value;paintBooks();});
+  const list=el('div',{class:'rows'});
+  const paintBooks=()=>{
+    const q=SX.q.trim().toLowerCase();
+    const from=SX.sec==='ot'?0:NT_START,to=SX.sec==='ot'?NT_START:BOOKS.length;
+    const rows=[];
+    for(let bi=from;bi<to;bi++){
+      const es=byBook[bi]||[];
+      if(!es.length) continue;
+      if(q&&BOOKS[bi][0].toLowerCase().indexOf(q.replace(/\s*\d.*$/,''))<0) continue;
+      const open=SX.book===bi;
+      rows.push(el('button',{type:'button',class:'row','aria-expanded':String(open),onclick:()=>{SX.book=open?null:bi;paintBooks();}},
+        el('div',{class:'meta'},el('span',{class:'when',text:BOOKS[bi][0]}),el('span',{text:es.length+(es.length===1?' note':' notes')}))));
+      if(open){
+        const counts={};es.forEach(e=>{counts[e.ch]=(counts[e.ch]||0)+1;});
+        rows.push(el('div',{class:'chgrid scrgrid'},Array.from({length:BOOKS[bi][1]},(_,i)=>i+1).map(ch=>
+          el('button',{type:'button',class:'chbtn'+(counts[ch]?' has':''),'aria-label':BOOKS[bi][0]+' '+ch+(counts[ch]?', '+counts[ch]+' notes':''),
+            disabled:!counts[ch],onclick:()=>{SX.chapter=ch;renderScripIndex();window.scrollTo(0,0);}},String(ch),counts[ch]?el('i',{text:String(counts[ch])}):null))));
+      }
+    }
+    list.replaceChildren(...(rows.length?rows:[el('p',{class:'empty-note',text:all.length?'No scriptures from that book yet.':'Scriptures you write anywhere in the app (like Gen. 3:15 or Psalm 23) will be collected here, in Bible order.'})]));
+  };
+  paintBooks();
+  box.replaceChildren(
+    el('h2',{class:'sect',text:'Scriptures in my notes'}),
+    el('p',{class:'hint',text:'Every scripture you have written about, anywhere in the app, in Bible order. '+all.length+(all.length===1?' reference':' references')+' so far.'}),
+    search,
+    el('div',{class:'subtabs'},[['ot','Hebrew-Aramaic'],['nt','Christian Greek']].map(x=>el('button',{type:'button',class:'pill','aria-pressed':String(SX.sec===x[0]),onclick:()=>{SX.sec=x[0];SX.book=null;renderScripIndex();}},x[1]))),
+    list,
+    el('p',{class:'hint',text:'Darker squares are chapters you have written about. Tap one to see your notes on it.'}));
+}
+function renderScripChapter(box,all){
+  const bi=SX.book,ch=SX.chapter,book=BOOKS[bi][0];
+  const es=all.filter(e=>e.bi===bi&&e.ch===ch).sort((a,b)=>(a.v||999)-(b.v||999)||a.when-b.when);
+  const groups=[];
+  es.forEach(e=>{
+    const key=e.v?(e.v2&&e.v2>e.v?'Verses '+e.v+'-'+e.v2:'Verse '+e.v):'Whole chapter';
+    let g=groups.find(x=>x.key===key);
+    if(!g){g={key:key,first:e,items:[]};groups.push(g);}
+    g.items.push(e);
+  });
+  const places=new Set(es.map(e=>e.where)).size;
+  box.replaceChildren(
+    el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>{SX.chapter=null;renderScripIndex();}},'← All scriptures'),
+    el('h2',{class:'sect',text:book+' '+ch}),
+    el('p',{class:'hint',text:es.length+(es.length===1?' note':' notes')+' from '+places+(places===1?' place':' places')}),
+    el('a',{class:'btn',href:refHref({bi:bi,ch:ch,v:1}),style:'justify-content:center'},'Read '+book+' '+ch+' in JW Library'),
+    ...groups.map(g=>el('div',{class:'scrgroup'},
+      el('div',{class:'scrhead'},el('h3',{text:g.key}),g.first.v?el('a',{href:refHref(g.first),class:'reflink'},'Open'):null),
+      g.items.map(e=>el('button',{type:'button',class:'screntry',onclick:()=>openTarget(e.src)},
+        el('span',{class:'scrsrc'},el('i',{text:e.star?'★ '+e.where:e.where}),e.title||''),
+        el('span',{class:'scrsnip',text:e.snip}))))));
 }
 
 /* ---------- one-document forms: week and month ---------- */
@@ -1263,6 +1427,8 @@ function renderWeek(){
   $('view-week').querySelector('.datenav').hidden=month;
   $('weekForm').hidden=month;
   if(month){renderMonthGlance();return;}
+  const ml=$('meetLink');
+  if(ml&&!ml.firstChild) ml.append(el('button',{type:'button',class:'btn ghost wide',onclick:()=>openLib('meetings')},'Meeting, talk and assembly notes'));
   const s=parseKey(S.weekSel),e=addDays(s,6);
   $('weekTitle').textContent=fmtShort(s)+' to '+fmtShort(e);
   const cur=mondayOf(todayKey());
@@ -2540,10 +2706,14 @@ function installSection(){
 }
 function renderSettings(){
   const D=window.DSL,box=$('view-settings');
+  const nTrash=Object.values(COLL).reduce((a,st)=>a+Object.values(st.items).filter(x=>x.deletedAt).length,0);
+  const trashSec=el('section',{class:'setsec'},el('h3',{text:'Trash'}),
+    el('p',{class:'hint',text:'Deleted entries stay here until you restore them.'}),
+    el('div',{class:'actions'},el('button',{type:'button',class:'btn ghost',onclick:()=>openLib('trash')},'Open Trash'+(nTrash?' ('+nTrash+')':''))));
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
+    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),trashSec,installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');

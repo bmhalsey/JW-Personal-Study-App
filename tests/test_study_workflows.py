@@ -3,6 +3,7 @@ Run: python3 -m unittest discover -s tests -v
 Requires Playwright and Chromium; no app dependencies are needed.
 """
 import json
+import re
 import os
 import unittest
 from pathlib import Path
@@ -81,11 +82,13 @@ class StudyWorkflows(unittest.TestCase):
         self.write_note(body='## Reflection\n**Patience** matters.\n> Be thoughtful.')
         self.page.on('dialog', lambda d: d.accept())
         self.page.get_by_role('button', name='Move to Trash', exact=True).click()
-        self.page.get_by_role('button', name='Trash', exact=True).click()
+        # Trash now opens from Settings
+        self.settings()
+        self.page.get_by_role('button', name=re.compile(r'^Open Trash')).click()
         expect(self.page.locator('#trashList')).to_contain_text('Patience')
         self.page.reload(wait_until='networkidle')
-        self.page.get_by_role('button', name='Library', exact=True).click()
-        self.page.get_by_role('button', name='Trash', exact=True).click()
+        self.settings()
+        self.page.get_by_role('button', name=re.compile(r'^Open Trash')).click()
         self.page.get_by_role('button', name='Restore', exact=True).click()
         expect(self.page.locator('#trashList')).to_contain_text('Nothing in Trash')
         self.settings()

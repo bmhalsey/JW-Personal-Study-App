@@ -362,6 +362,27 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .dtfull .introsec{margin:0 0 10px}
 .dtfull .introbook{margin-bottom:10px}
 
+/* library: sub-tabs, scripture index */
+#libSub{gap:6px}
+#libSub .seg-btn{min-height:38px;padding:0 14px;border-radius:999px;border:0;background:var(--sunken);color:var(--muted);font:600 14px var(--font-body);cursor:pointer}
+#libSub .seg-btn[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 0 0 2px var(--accent) inset}
+.libsubtitle{font:600 18px/1.2 var(--font-display);align-self:center}
+.btn.wide{width:100%}
+.scrgrid{padding:10px 0 14px;border-bottom:1px solid var(--line)}
+.scrgrid .chbtn{position:relative}
+.scrgrid .chbtn:disabled{opacity:.45;cursor:default}
+.scrgrid .chbtn.has{background:var(--heat1);border-color:transparent}
+.scrgrid .chbtn i{position:absolute;top:2px;right:5px;font-style:normal;font-size:11px;font-weight:700;color:var(--accent)}
+.scrgroup{display:flex;flex-direction:column;gap:8px}
+.scrhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.scrhead h3{margin:0;font:700 19px/1.2 var(--font-display);color:var(--gold)}
+.screntry{display:flex;flex-direction:column;gap:4px;width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.scrsrc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.scrsrc i{font-style:normal;padding:1px 8px;border-radius:999px;background:var(--sunken);color:var(--accent)}
+.scrsnip{font-size:15px;overflow-wrap:anywhere}
+.refchips{display:flex;flex-wrap:wrap;gap:6px}
+.refchip{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:var(--sunken);color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
+
 /* daily text card */
 .dtcard{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .dtcard>*{min-width:0}
