@@ -804,11 +804,16 @@ function buildHabits(){
   HABITS.forEach(hb=>{
     const k=hb.key;
     const check=el('button',{type:'button',class:'check',role:'checkbox','aria-checked':'false','aria-label':hb.label+' done',id:'check-'+k,
-      onclick:()=>{draft[k].done=!draft[k].done;touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
+      onclick:()=>{draft[k].done=!draft[k].done;if(k==='text'&&draft[k].done) fillDtScripture();touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
     const sum=el('p',{class:'habit-sum',id:'sum-'+k});
     const tg=el('button',{type:'button',class:'toggle',id:'toggle-'+k,'aria-expanded':'false','aria-controls':'body-'+k,
       onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:'Notes'}),svg(ICON_DOWN));
-    const mk=f=>mkControl(f,'d-'+k,(prop,val)=>{draft[k][prop]=val;touchDay();paintSummary(k);paintActions(k);});
+    const mk=f=>mkControl(f,'d-'+k,(prop,val)=>{
+      draft[k][prop]=val;
+      const filled=k==='text'&&prop!=='ref'&&prop!=='vtext'&&fillDtScripture();
+      touchDay();paintSummary(k);paintActions(k);
+      if(filled) paintHabits();
+    });
     const fields=hb.fields.filter(f=>!f.more).map(mk);
     const moreF=hb.fields.filter(f=>f.more);
     if(moreF.length){
@@ -940,6 +945,8 @@ function renderToday(){
   renderProgress();
   renderStreaks();
   renderSunBanner();
+  renderDailyCard();
+  paintDtHints();
 }
 function openExpanded(){
   expanded=new Set(HABITS.filter(hb=>TEXTPROPS.some(p=>draft[hb.key][p])).map(hb=>hb.key));
@@ -1832,6 +1839,47 @@ function backupSection(){
       el('button',{type:'button',class:'btn ghost',id:'s-restore',onclick:()=>{confirm.hidden=false;}},'Restore from the box')),
     confirm,msg);
 }
+function dailyTextSection(){
+  const msg=el('p',{class:'hint',id:'s-dtmsg',role:'status'});
+  const list=el('div',{class:'stats'});
+  const paintList=()=>{
+    const ys=Object.keys(DT.years).sort();
+    list.hidden=!ys.length;
+    list.replaceChildren(...ys.map(y=>el('div',{class:'stat'},
+      el('span',{text:y+': '+DT.years[y].count+' days loaded'}),
+      el('button',{type:'button',class:'link',onclick:async()=>{
+        try{await dtStore(y,true);}catch(e){}
+        delete DT.years[y];paintList();renderDailyCard();paintDtHints();
+        msg.textContent='Removed '+y+'.';
+      }},'Remove'))));
+  };
+  const file=el('input',{type:'file',id:'s-dtfile',accept:'.epub,application/epub+zip',multiple:true,class:'sr',tabindex:'-1','aria-hidden':'true'});
+  const pick=el('button',{type:'button',class:'btn',id:'s-dtpick',onclick:()=>file.click()},'Load daily text file');
+  file.addEventListener('change',async()=>{
+    const fs=Array.from(file.files||[]);
+    if(!fs.length) return;
+    pick.disabled=true;
+    const done=[];
+    try{
+      for(const f of fs){
+        msg.textContent='Reading '+f.name+'...';
+        const y=await importDailyText(f);
+        done.push(y.count+' days for '+y.year);
+      }
+      msg.textContent='Loaded '+done.join(' and ')+'. It now shows at the top of Today.';
+    }catch(e){
+      msg.textContent=(done.length?'Loaded '+done.join(' and ')+'. ':'')+((e&&e.msg)||'Could not read that file. Make sure it is the EPUB version.');
+    }finally{
+      pick.disabled=false;file.value='';paintList();
+    }
+  });
+  paintList();
+  return el('section',{class:'setsec'},
+    el('h3',{text:'Daily text'}),
+    el('p',{text:"Load Examining the Scriptures Daily as an EPUB file from jw.org. Each day's scripture then shows in large letters at the top of Today, with the comments."}),
+    el('p',{class:'hint',text:'The file stays on this device. It is not uploaded, synced or put in backups, so load it on each device you use. Load next year\'s book the same way when it comes out.'}),
+    list,el('div',{class:'actions'},pick),file,msg);
+}
 function weekSection(D){
   const cb=el('input',{type:'checkbox',id:'s-family'});
   cb.checked=D.settings.showFamily!==false;
@@ -1853,7 +1901,7 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
+    dailyTextSection(),weekSection(D),aiSection(D,D.settings),syncSection(D,D.settings),backupSection(),installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -1944,6 +1992,183 @@ function onColl(st,snap){
 }
 function onErr(e){
   setStatus(e&&e.code==='revoked'?'Access to your entries ended. Reopen the page to continue.':'Could not load your saved entries.','err');
+}
+
+/* ---------- daily text from the person's own EPUB file ----------
+   The file is read on this device and kept in this browser's IndexedDB only.
+   It is never part of the app's code, sync or backups. */
+const DT={years:{},ready:false,open:false};
+const MONTH_NAMES=['january','february','march','april','may','june','july','august','september','october','november','december'];
+const dtClean=s=>String(s||'').replace(/[​­]/g,'').replace(/\s+/g,' ').trim();
+function idbReq(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+let dtDbP=null;
+function dtDb(){
+  if(!dtDbP) dtDbP=new Promise((res,rej)=>{
+    if(!window.indexedDB){rej(new Error('no idb'));return;}
+    const r=indexedDB.open('dsl-dailytext',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('years');
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  return dtDbP;
+}
+async function dtLoadAll(){
+  try{
+    const db=await dtDb();
+    const all=await idbReq(db.transaction('years').objectStore('years').getAll());
+    all.forEach(y=>{if(y&&y.year&&y.days) DT.years[y.year]=y;});
+  }catch(e){}
+  DT.ready=true;
+  renderDailyCard();
+  paintDtHints();
+}
+async function dtStore(y,remove){
+  const db=await dtDb();
+  const tx=db.transaction('years','readwrite');
+  if(remove) tx.objectStore('years').delete(y); else tx.objectStore('years').put(y,y.year);
+  await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);});
+}
+function dtFor(k){const y=DT.years[k.slice(0,4)];return (y&&y.days[k])||null;}
+
+/* small ZIP reader (an EPUB is a ZIP); needs DecompressionStream, which current phones have */
+async function inflateRaw(data){
+  const s=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function readZipText(buf,want){
+  const dv=new DataView(buf),dec=new TextDecoder();
+  let e=buf.byteLength-22;
+  while(e>=0&&dv.getUint32(e,true)!==0x06054b50) e--;
+  if(e<0) throw {msg:'That file is not an EPUB.'};
+  const n=dv.getUint16(e+10,true);
+  let p=dv.getUint32(e+16,true);
+  const out=new Map();
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50) throw {msg:'That EPUB file looks damaged. Try downloading it again.'};
+    const method=dv.getUint16(p+10,true),csize=dv.getUint32(p+20,true);
+    const nlen=dv.getUint16(p+28,true),xlen=dv.getUint16(p+30,true),clen=dv.getUint16(p+32,true),off=dv.getUint32(p+42,true);
+    const name=dec.decode(new Uint8Array(buf,p+46,nlen));
+    p+=46+nlen+xlen+clen;
+    if(!want.test(name)) continue;
+    const start=off+30+dv.getUint16(off+26,true)+dv.getUint16(off+28,true);
+    const data=new Uint8Array(buf,start,csize);
+    if(method===0) out.set(name,dec.decode(data));
+    else if(method===8){
+      if(typeof DecompressionStream==='undefined') throw {msg:'This browser is too old to read the file. Update your phone, then try again.'};
+      out.set(name,dec.decode(await inflateRaw(data)));
+    }
+  }
+  return out;
+}
+function parseDailyText(files){
+  let title='';
+  files.forEach((t,name)=>{if(/\.opf$/i.test(name)){const m=t.match(/<dc:title[^>]*>([^<]*)/);if(m) title=m[1];}});
+  const ym=title.match(/(20\d\d)/);
+  if(!/Examining the Scriptures/i.test(title)||!ym) throw {msg:'That file is not Examining the Scriptures Daily. Download the EPUB of it from jw.org.'};
+  const year=ym[1],days={},parser=new DOMParser();
+  files.forEach((txt,name)=>{
+    if(!/\.x?html$/i.test(name)||txt.indexOf('themeScrp')<0) return;
+    let doc=parser.parseFromString(txt,'application/xhtml+xml');
+    if(doc.querySelector('parsererror')) doc=parser.parseFromString(txt,'text/html');
+    const th=doc.querySelector('.themeScrp');
+    if(!th) return;
+    /* the Memorial day has extra headings before the date */
+    let dm=null,isMemorial=false;
+    Array.from(doc.querySelectorAll('h1,h2,h3')).some(h=>{
+      const ht=dtClean(h.textContent);
+      dm=ht.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([A-Za-z]+)\s+(\d{1,2})$/);
+      if(dm) isMemorial=/memorial date/i.test(ht);
+      return !!dm;
+    });
+    if(!dm) return;
+    const mi=MONTH_NAMES.indexOf(dm[1].toLowerCase());
+    if(mi<0) return;
+    const key=year+'-'+pad(mi+1)+'-'+pad(+dm[2]);
+    const a=th.querySelector('a');
+    let quote=dtClean(th.textContent);
+    const dash=quote.lastIndexOf('—');
+    if(dash>0) quote=quote.slice(0,dash).trim();
+    let full='';
+    const href=a&&a.getAttribute('href');
+    if(href&&href[0]==='#'){
+      const c=doc.getElementById(href.slice(1));
+      const pp=c&&c.querySelector('.extScrpCiteTxt');
+      if(pp) full=dtClean(pp.textContent).replace(/^\^\s*\([^)]*\)\s*/,'').replace(/\*/g,'');
+    }
+    const memo=doc.querySelector('.closingContent');
+    days[key]={ref:a?dtClean(a.textContent):'',quote:quote,full:full,
+      body:Array.from(doc.querySelectorAll('.bodyTxt p')).map(p=>dtClean(p.textContent)).filter(Boolean),
+      memorial:memo?dtClean(memo.textContent):'',isMemorial:isMemorial};
+  });
+  const count=Object.keys(days).length;
+  if(count<300) throw {msg:'Could only find '+count+' days in that file. Try downloading the EPUB again.'};
+  return {year:year,title:dtClean(title),count:count,days:days,loadedAt:Date.now()};
+}
+async function importDailyText(file){
+  const buf=await file.arrayBuffer();
+  const y=parseDailyText(await readZipText(buf,/\.(x?html|opf)$/i));
+  try{await dtStore(y);}catch(e){throw {msg:'This browser would not save the daily text. If you are in a private window, open the app normally and try again.'};}
+  DT.years[y.year]=y;
+  renderDailyCard();
+  paintDtHints();
+  return y;
+}
+function libraryHref(k,d){
+  return k===todayKey()?'jwlibrary:///':'https://wol.jw.org/en/wol/h/r1/lp-e/'+k.slice(0,4)+'/'+(+k.slice(5,7))+'/'+(+k.slice(8,10));
+}
+function renderDailyCard(){
+  const box=$('dtCard');
+  if(!box) return;
+  const k=S.sel,d=dtFor(k);
+  if(!d){
+    const none=DT.ready&&!Object.keys(DT.years).length;
+    box.hidden=!none;
+    box.className='dtcard empty';
+    if(none) box.replaceChildren(
+      el('p',{class:'hint',text:'Want the daily text here every day? Load the Examining the Scriptures Daily EPUB file in Settings.'}),
+      el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>setTab('settings')},'Open Settings'));
+    return;
+  }
+  const isToday=k===todayKey();
+  box.hidden=false;
+  box.className='dtcard';
+  const main=el('a',{class:'dtmain',href:libraryHref(k,d),target:isToday?null:'_blank',rel:isToday?null:'noopener noreferrer'},
+    el('p',{class:'dtquote',text:d.quote}),
+    el('p',{class:'dtref',text:d.ref}),
+    el('p',{class:'dtgo'},isToday?'Open in JW Library':'Open this day on jw.org',svg(ICON_OUT)));
+  const kids=[el('p',{class:'dtcap'},el('span',{text:'Daily text'}),el('span',{text:fmtShort(parseKey(k))})),main];
+  if(d.isMemorial) kids.splice(1,0,el('p',{class:'dtmemo'},el('b',{text:'Memorial'}),' · after sundown'));
+  if(d.memorial) kids.push(el('p',{class:'dtmemo',text:d.memorial}));
+  const tg=el('button',{type:'button',class:'morebtn'+(DT.open?' open':''),'aria-expanded':String(DT.open),
+    onclick:()=>{DT.open=!DT.open;renderDailyCard();}},el('span',{text:DT.open?'Hide the comments':'Read the comments'}),svg(ICON_DOWN));
+  kids.push(tg);
+  if(DT.open){
+    const body=el('div',{class:'dtbody'});
+    if(d.full) body.append(el('p',{class:'dtverse'},el('b',{text:d.ref+' '}),d.full));
+    d.body.forEach(t=>{
+      const m=t.match(/^(.*?)\s+(w\d\d\.\d\d\s+[\d\-–,\s]+¶[\d\-–,\s]+)$/);
+      if(m) body.append(el('p',{text:m[1]}),el('p',{class:'dtsrc',text:m[2]}));
+      else body.append(el('p',{text:t}));
+    });
+    const code=bibleCode(d.ref);
+    if(code) body.append(el('a',{class:'reflink',href:'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+code},'Open '+d.ref+' in JW Library'));
+    kids.push(body);
+  }
+  box.replaceChildren(...kids);
+}
+/* show the day's scripture in the empty boxes, and save it once the person starts writing */
+function paintDtHints(){
+  const d=dtFor(draft.date);
+  const r=$('d-text-ref'),v=$('d-text-vtext');
+  if(r) r.placeholder=d?d.ref:'For example, Psalm 37:4';
+  if(v) v.placeholder=d?(d.full||d.quote):'The verse, typed or pasted';
+}
+function fillDtScripture(){
+  const d=dtFor(draft.date),t=draft.text;
+  if(!d||t.ref.trim()||t.vtext.trim()) return false;
+  t.ref=d.ref;
+  t.vtext=d.full||d.quote;
+  return true;
 }
 
 /* ---------- bullet points and lists in text boxes ----------
@@ -2118,6 +2343,7 @@ WK.load(S.weekSel);
 MIN.load(minMonth());
 MO.load(S.monthSel);
 setupFormatting();
+dtLoadAll();
 buildHabits();
 openExpanded();
 paintHabits(true);

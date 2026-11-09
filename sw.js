@@ -1,5 +1,5 @@
 /* Keeps the app available offline. Bump CACHE when you change the app files. */
-const CACHE='study-log-v2';
+const CACHE='study-log-v3';
 const SHELL=['./','index.html','app.js','adapters.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{
