@@ -19,9 +19,9 @@ const HABITS=[
     {prop:'verse',label:'Verse that stood out',hint:'For example, Genesis 2:21-23',more:true,link:true},
     {prop:'verseWhy',label:'Why it stood out',multi:true,more:true},
     {prop:'question',label:'A question I have',multi:true,more:true}]},
-  {key:'study',label:'Personal study',saveQuestion:true,help:true,fields:[
-    {prop:'ref',label:'Topic',hint:'What are you studying?'},
-    {prop:'note',label:'What I learned',multi:true},
+  {key:'study',label:'Personal study',saveQuestion:true,help:true,writer:true,fields:[
+    {prop:'ref',label:'Topic',hint:'What are you studying?',inWriter:true},
+    {prop:'note',label:'What I learned',multi:true,inWriter:true},
     {prop:'apply',label:'How I can apply it',multi:true},
     {prop:'question',label:'Question to look into next',multi:true}]}
 ];
@@ -887,16 +887,16 @@ function buildHabits(){
     const check=el('button',{type:'button',class:'check',role:'checkbox','aria-checked':'false','aria-label':hb.label+' done',id:'check-'+k,
       onclick:()=>{draft[k].done=!draft[k].done;if(k==='text'&&draft[k].done) fillDtScripture();if(k==='bible'&&draft[k].done){if(!draft.bible.ref.trim()){const pl=todayPlan(draft.date);if(pl&&pl.today) draft.bible.ref=pl.today;}markReadQuiet(draft.bible.ref);}touchDay();paintHabits();renderProgress();renderStreaks();}},svg(ICON_CHECK));
     const sum=el('p',{class:'habit-sum',id:'sum-'+k});
-    const write=el('button',{type:'button',class:'btn ghost',onclick:()=>openWriting({kind:'day',habit:k})},'Write');
+    const write=hb.writer?el('button',{type:'button',class:'btn ghost',id:'write-'+k,onclick:()=>openWriting({kind:'day',habit:k})},'Write'):null;
     const tg=el('button',{type:'button',class:'toggle',id:'toggle-'+k,'aria-expanded':'false','aria-controls':'body-'+k,
-      onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:'Study fields'}),svg(ICON_DOWN));
+      onclick:()=>{if(expanded.has(k)) expanded.delete(k); else expanded.add(k); paintHabits();}},el('span',{text:hb.writer?'Application and questions':'Notes'}),svg(ICON_DOWN));
     const mk=f=>mkControl(f,'d-'+k,(prop,val)=>{
       draft[k][prop]=val;draft[k].updatedAt=Date.now();
       const filled=k==='text'&&prop!=='ref'&&prop!=='vtext'&&fillDtScripture();
       touchDay();paintSummary(k);paintActions(k);
       if(filled) paintHabits();
     });
-    const fields=hb.fields.filter(f=>!f.more).map(mk);
+    const fields=hb.fields.filter(f=>!f.more&&!f.inWriter).map(mk);
     const moreF=hb.fields.filter(f=>f.more);
     if(moreF.length){
       fields.push(el('button',{type:'button',class:'morebtn',id:'more-'+k,'aria-expanded':'false','aria-controls':'morewrap-'+k,
@@ -929,7 +929,9 @@ function paintSummary(k){
   const s=draft[k];
   const n=$('sum-'+k);
   const t=[s.title||s.ref,cut(readableSnippet(s.note||s.gems||s.summary||s.verse),130)].filter(Boolean).join(' · ');
-  n.textContent=t||'Start with a thought, question, or scripture.';
+  n.textContent=t||'No notes yet';
+  const w=$('write-'+k);
+  if(w) w.textContent=s.note.trim()?'Continue writing':'Write';
   n.classList.toggle('none',!t);
   const edited=$('edited-'+k);edited.textContent=s.updatedAt?'Edited '+new Date(s.updatedAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
 }
@@ -1031,7 +1033,9 @@ function renderToday(){
   paintDtHints();
   renderHome();
 }
-function openExpanded(){expanded=new Set();}
+function openExpanded(){
+  expanded=new Set(HABITS.filter(hb=>flatFields(hb.fields).some(f=>!f.inWriter&&String(draft[hb.key][f.prop]||'').trim())).map(hb=>hb.key));
+}
 function goTo(k){
   commitDay();
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
@@ -2553,29 +2557,53 @@ const FMT_OPS={
     const ind=p.indent.replace(/^( {1,4}|\t)/,'');
     return ind+(p.mark?(p.mark==='◦'&&!ind?'•':p.mark)+' ':'')+p.rest;
   }),
-  heading:lines=>lines.map(l=>{const p=splitLine(l);return p.indent+p.rest.toUpperCase();})
+  heading:lines=>{
+    const full=lines.filter(l=>l.trim()),all=full.length>0&&full.every(l=>/^#{1,6} /.test(l));
+    return lines.map(l=>!l.trim()?l:all?l.replace(/^#{1,6} /,''):'## '+l.replace(/^#{1,6} /,''));
+  },
+  quote:lines=>{
+    const full=lines.filter(l=>l.trim()),all=full.length>0&&full.every(l=>l.startsWith('> '));
+    return lines.map(l=>!l.trim()?l:all?l.slice(2):'> '+l);
+  }
+};
+/* one formatting bar for every text box, the full-screen writer included:
+   [id, label, icon, accessible name, action] */
+const FMT_ICON={
+  bullets:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5" cy="7" r="1.6" fill="currentColor"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="17" r="1.6" fill="currentColor"/><path d="M10 7h10M10 12h10M10 17h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  numbers:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5h2v4M4 9h3M4 14h3l-3 4h3M10 7h10M10 12h10M10 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  todo:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="6" height="6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16l1.5 1.5L9 14.5M12 7h8M12 16h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  indent:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h16M10 10h10M10 14h10M4 18h16M4 9.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  outdent:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h16M10 10h10M10 14h10M4 18h16M7 9.5L4 12l3 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 const FMT_BTNS=[
-  ['bullets','Bullets','<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5" cy="7" r="1.6" fill="currentColor"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="17" r="1.6" fill="currentColor"/><path d="M10 7h10M10 12h10M10 17h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'],
-  ['numbers','Numbers','<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5h2v4M4 9h3M4 14h3l-3 4h3M10 7h10M10 12h10M10 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
-  ['todo','To-do','<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="6" height="6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 16l1.5 1.5L9 14.5M12 7h8M12 16h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'],
-  ['indent','','<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h16M10 10h10M10 14h10M4 18h16M4 9.5l3 2.5-3 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>','Indent'],
-  ['outdent','','<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h16M10 10h10M10 14h10M4 18h16M7 9.5L4 12l3 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>','Outdent'],
-  ['heading','Heading','']
+  ['bold','Bold','',null,ta=>wrapSelection(ta,'**','**','important thought')],
+  ['heading','Heading','',null,ta=>editLines(ta,FMT_OPS.heading)],
+  ['bullets','Bullets',FMT_ICON.bullets,null,ta=>editLines(ta,FMT_OPS.bullets)],
+  ['numbers','Numbers',FMT_ICON.numbers,null,ta=>editLines(ta,FMT_OPS.numbers)],
+  ['todo','Checklist',FMT_ICON.todo,null,ta=>editLines(ta,FMT_OPS.todo)],
+  ['quote','Quote','',null,ta=>editLines(ta,FMT_OPS.quote)],
+  ['indent','',FMT_ICON.indent,'Indent',ta=>editLines(ta,FMT_OPS.indent)],
+  ['outdent','',FMT_ICON.outdent,'Outdent',ta=>editLines(ta,FMT_OPS.outdent)],
+  ['link','Link','',null,ta=>{
+    const url=prompt('Paste a web link (https://…)');
+    if(!url) return;
+    if(!safeURL(url)){setStatus('Use a web address that starts with http or https.','err');return;}
+    wrapSelection(ta,'[',']('+url+')','link text');
+  }]
 ];
+function fmtButtons(getTa,before){
+  return FMT_BTNS.map(b=>el('button',{type:'button',class:'fmtb','aria-label':b[3]||null,
+    onmousedown:e=>e.preventDefault(),
+    onclick:()=>{const ta=getTa();if(!ta||!document.body.contains(ta)) return;if(before) before();ta.focus();b[4](ta);}},
+    b[2]?svg(b[2]):null,b[1]||null));
+}
 function setupFormatting(){
   let target=null;
   const bar=el('div',{class:'fmtbar',role:'toolbar','aria-label':'Formatting',hidden:true});
-  FMT_BTNS.forEach(b=>{
-    const btn=el('button',{type:'button',class:'fmtb','aria-label':b[3]||null,
-      onmousedown:e=>e.preventDefault(),
-      onclick:()=>{if(target&&document.body.contains(target)) editLines(target,FMT_OPS[b[0]]);}},
-      b[2]?svg(b[2]):null,b[1]||null);
-    bar.append(btn);
-  });
+  bar.append(...fmtButtons(()=>target));
   document.addEventListener('focusin',e=>{
     const t=e.target;
-    if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')){
+    if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')&&!t.dataset.ownbar){
       target=t;
       if(bar.nextSibling!==t) t.parentNode.insertBefore(bar,t);
       bar.hidden=false;
@@ -2583,11 +2611,12 @@ function setupFormatting(){
       bar.hidden=true;
     }
   });
+  /* wait until the tap that moved focus has landed, so buttons below don't jump out from under it */
   document.addEventListener('focusout',()=>{
     setTimeout(()=>{
       const a=document.activeElement;
       if(a!==target&&!bar.contains(a)) bar.hidden=true;
-    },0);
+    },350);
   });
   document.addEventListener('input',e=>{const t=e.target;if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')) autoGrow(t);});
   window.addEventListener('resize',()=>document.querySelectorAll('textarea.fmt').forEach(autoGrow));
@@ -2652,52 +2681,46 @@ function allLoaded(){return loadedCollections.size===6+Object.keys(COLL).length;
 function preferencesSection(){
   const section=el('section',{class:'setsec'},el('h3',{text:'Your study space'}));
   [['showStreaks','Show streak counters'],['showProgress','Show daily completion tracking'],['backupReminders','Remind me to back up weekly']].forEach(([key,label])=>{
-    const input=el('input',{type:'checkbox',id:'pref-'+key});input.checked=key==='backupReminders'?window.DSL.settings[key]!==false:!!window.DSL.settings[key];
+    const input=el('input',{type:'checkbox',id:'pref-'+key});input.checked=window.DSL.settings[key]!==false;
     input.onchange=()=>{if(!window.DSL.saveSettings({[key]:input.checked})) setStatus('Could not save this preference.','err');applyPreferences();};
     section.append(el('div',{class:'checkrow'},input,el('label',{for:input.id,text:label})));
   });
-  section.append(el('p',{class:'hint',text:'Write freely. Study prompts and completion tracking are there when you want them.'}));
+
   return section;
 }
 function applyPreferences(){
-  document.querySelector('[aria-label="Current streaks"]').hidden=!window.DSL.settings.showStreaks;
-  document.querySelector('.progress').hidden=!window.DSL.settings.showProgress;
+  document.querySelector('[aria-label="Current streaks"]').hidden=window.DSL.settings.showStreaks===false;
+  document.querySelector('.progress').hidden=window.DSL.settings.showProgress===false;
   renderHome();
 }
+/* Today keeps one quiet line here: a reminder only when a backup is overdue */
 function renderHome(){
   const box=$('studyHome');if(!box)return;
-  const recent=activeItems(COLL.notes).sort((a,b)=>b.updatedAt-a.updatedAt)[0];
-  const due=dueVerses().length;
-  const question=activeItems(COLL.questions).filter(x=>x.status!=='answered').sort((a,b)=>a.createdAt-b.createdAt)[0];
   const last=Number(window.DSL.settings.lastBackup)||0;
   const overdue=window.DSL.settings.backupReminders!==false&&(!last||Date.now()-last>7*86400000);
-  box.replaceChildren(...[
-    el('p',{class:'cap',text:'A little time to reflect'}),
-    el('h2',{text:'What stayed with you?'}),
-    el('p',{class:'hint',text:'Make space for a thought, a question, or something you want to put into practice.'}),
-    el('div',{class:'actions'},
-      el('button',{type:'button',class:'btn',onclick:()=>openWriting({kind:'day',habit:'study'})},draft.study.note?'Continue studying':'Start studying'),
-      el('button',{type:'button',class:'btn ghost',onclick:quickNote},'Write a note')),
-    recent?el('button',{type:'button',class:'recent-study',onclick:()=>{setTab('library');S.lib='notes';showLib();openItem(COLL.notes,recent.id);}},
-      el('span',{class:'cap',text:'Continue in your notebook'}),el('strong',{text:recent.title||'Untitled note'}),
-      el('span',{class:'snip',text:cut(readableSnippet(recent.body),140)}),el('span',{class:'hint',text:'Edited '+new Date(recent.updatedAt).toLocaleDateString()})):null,
-    due?el('button',{type:'button',class:'link',onclick:()=>{S.rev='verses';setTab('review');}},due+' scripture'+(due===1?'':'s')+' ready to revisit'):null,
-    question?el('button',{type:'button',class:'question-prompt',onclick:()=>openTarget({coll:'questions',id:question.id})},'A question to return to: '+cut(question.text,140)):null,
-    overdue?el('div',{class:'backup-reminder'},el('span',{text:last?'It has been a week since your last backup.':'Keep a copy of your study notes somewhere safe.'}),
-      el('button',{type:'button',class:'link',onclick:()=>{setTab('settings');$('backupSection').scrollIntoView({block:'center'});}},'Back up notes')):null].filter(Boolean));
+  box.hidden=!overdue;
+  if(!overdue){box.replaceChildren();return;}
+  box.replaceChildren(el('span',{text:last?'It has been over a week since your last backup.':'You have not backed up your notes on this device yet.'}),
+    el('button',{type:'button',class:'link',onclick:()=>{setTab('settings');const b=$('backupSection');if(b) b.scrollIntoView({block:'center'});}},'Back up now'));
 }
 function quickNote(){
   flushAll();setTab('library');S.lib='notes';showLib();openItem(COLL.notes,null,{id:'blank',title:'',body:''});
 }
 function sourceLabel(src){
-  if(src.coll==='days') return (HABITS.find(h=>h.key===src.habit)||{label:'Study'}).label+' · '+src.id;
+  if(src.coll==='days') return (HABITS.find(h=>h.key===src.habit)||{label:'Study'}).label+' · '+fmtDay(parseKey(src.id));
   const st=Object.values(COLL).find(st=>st.cfg.coll===src.coll);
   const item=st&&st.items[src.id];
   return item?(st.cfg.row(item).title||st.cfg.singular):src.coll+' · '+src.id;
 }
 function openTarget(src){
   if(writingDialog&&writingDialog.open) writingDialog.close();
-  if(src.coll==='days'){openDay(src.id);if(src.habit)openWriting({kind:'day',habit:src.habit});return;}
+  if(src.coll==='days'){
+    openDay(src.id);
+    const hb=HABITS.find(h=>h.key===src.habit);
+    if(hb&&hb.writer) openWriting({kind:'day',habit:hb.key});
+    else if(hb){expanded.add(hb.key);paintHabits();const b=$('body-'+hb.key);if(b) b.parentNode.parentNode.scrollIntoView({block:'start'});}
+    return;
+  }
   const st=Object.values(COLL).find(x=>x.cfg.coll===src.coll);
   if(st){if(!st.items[src.id]||st.items[src.id].deletedAt){setStatus('This entry is in Trash or is no longer available.');return;}
     S.lib=st.cfg.key;setTab('library');openItem(st,src.id);return;}
@@ -2711,7 +2734,7 @@ function searchRecords(){
   Object.values(eff()).forEach(day=>HABITS.forEach(h=>{
     const item=day[h.key];if(!hasContent(item))return;
     records.push({src:{coll:'days',id:day.date,habit:h.key},title:item.title||item.ref||h.label,
-      label:h.label+' · '+day.date,text:TEXTPROPS.map(p=>item[p]).join('\n'),updatedAt:day.updatedAt});
+      label:h.label+' · '+fmtDay(parseKey(day.date)),text:TEXTPROPS.map(p=>item[p]).join('\n'),updatedAt:day.updatedAt});
   }));
   Object.values(COLL).forEach(st=>activeItems(st).forEach(item=>records.push({src:{coll:st.cfg.coll,id:item.id},title:st.cfg.row(item).title,
     label:st.cfg.plural,text:st.cfg.search(item),updatedAt:item.updatedAt})));
@@ -2766,76 +2789,49 @@ function openWriting(session){
   const src=isDay?{coll:'days',id:draft.date,habit:session.habit}:{coll:st.cfg.coll,id:st.draft.id};
   const touch=()=>{if(isDay){item().updatedAt=Date.now();touchDay();paintSummary(session.habit);}else touchColl(st);};
   const dialog=el('dialog',{class:'writing-dialog','aria-label':'Study note editor'});writingDialog=dialog;
-  const title=el('input',{class:'writing-title',type:'text','aria-label':'Study title',placeholder:'Give this study a title',value:item().title||''});
-  const reference=el('input',{type:'text','aria-label':isDay?'Scripture or topic':'Topic',placeholder:isDay?'Scripture reference or topic':'Topic, Bible book, or character',value:(isDay?item().ref:item().topic)||''});
+  const title=el('input',{class:'writing-title',type:'text','aria-label':isDay?'Topic':'Note title',placeholder:isDay?'What are you studying?':'Give this note a title',value:(isDay?item().ref:item().title)||''});
+  const reference=isDay?null:el('input',{type:'text','aria-label':'Topic',placeholder:'Topic, Bible book, or character',value:item().topic||''});
   const reflinks=el('div',{class:'reflinks'});
-  refLink(reflinks,reference.value);
-  const ta=el('textarea',{id:'writingBody',class:'writing-body',rows:16,'aria-label':'Study notes',placeholder:'Start writing. A thought, a question, a connection…'});ta.value=item()[bodyKey]||'';
+  refLink(reflinks,isDay?title.value:reference.value);
+  const ta=el('textarea',{id:'writingBody',class:'writing-body fmt','data-ownbar':'1',rows:16,'aria-label':'Study notes',placeholder:'Start writing. A thought, a question, a connection…'});ta.value=item()[bodyKey]||'';
   const preview=el('article',{class:'writing-preview',hidden:true});
   const status=el('p',{id:'writingStatus',class:'hint',role:'status',text:$('statusText').textContent});
-  const meta=el('p',{class:'hint',text:isDay?HABITS.find(x=>x.key===session.habit).label+' · '+draft.date:'Notebook · '+new Date(item().updatedAt||Date.now()).toLocaleDateString()});
+  const meta=el('p',{class:'hint',text:isDay?HABITS.find(x=>x.key===session.habit).label+' · '+fmtDay(parseKey(draft.date)):'Notebook · '+new Date(item().updatedAt||Date.now()).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})});
   const edit=(key,val)=>{item()[key]=val;touch();};
-  title.oninput=()=>edit('title',title.value);reference.oninput=()=>{edit(isDay?'ref':'topic',reference.value);refLink(reflinks,reference.value);};
+  if(isDay) title.oninput=()=>{edit('ref',title.value);refLink(reflinks,title.value);};
+  else{title.oninput=()=>edit('title',title.value);reference.oninput=()=>{edit('topic',reference.value);refLink(reflinks,reference.value);};}
   ta.oninput=()=>{edit(bodyKey,ta.value);wordCount.textContent=ta.value.trim()?ta.value.trim().split(/\s+/).length+' words':'Your space to think';};
   const wordCount=el('span',{class:'hint',text:ta.value.trim()?ta.value.trim().split(/\s+/).length+' words':'Your space to think'});
   const toolbar=el('div',{class:'writing-toolbar',role:'toolbar','aria-label':'Format study notes'});
-  const format=(label,fn)=>toolbar.append(el('button',{type:'button',class:'fmtb',onmousedown:e=>e.preventDefault(),onclick:()=>{if(!preview.hidden){readBtn.click();}fn();ta.focus();}},label));
-  format('Bold',()=>wrapSelection(ta,'**','**','important thought'));
-  format('Heading',()=>editLines(ta,ls=>ls.map(l=>l.startsWith('## ')?l.slice(3):'## '+l)));
-  format('Bullets',()=>editLines(ta,FMT_OPS.bullets));
-  format('Numbers',()=>editLines(ta,FMT_OPS.numbers));
-  format('Checklist',()=>editLines(ta,FMT_OPS.todo));
-  format('Quote',()=>editLines(ta,ls=>ls.map(l=>l.startsWith('> ')?l.slice(2):'> '+l)));
-  format('Link',()=>{
-    const url=prompt('Paste a web link (https://…)');if(!url)return;
-    if(!safeURL(url)){message.textContent='Use an http or https web address.';return;}
-    wrapSelection(ta,'[',']('+url+')','link text');
-  });
+  toolbar.append(...fmtButtons(()=>ta,()=>{if(!preview.hidden) readBtn.click();}));
   const readBtn=el('button',{type:'button',class:'btn ghost',onclick:()=>{
-    const read=preview.hidden;preview.hidden=!read;ta.hidden=read;toolbar.hidden=read;prompts.hidden=read;
+    const read=preview.hidden;preview.hidden=!read;ta.hidden=read;toolbar.hidden=read;
     readBtn.textContent=read?'Edit note':'Read note';
-    preview.replaceChildren(...[el('h1',{text:title.value||reference.value||'Study note'}),el('p',{class:'hint',text:meta.textContent}),reference.value?el('p',{text:reference.value}):null,richText(ta.value)].filter(Boolean));
+    preview.replaceChildren(...[el('h1',{text:title.value||(reference&&reference.value)||'Study note'}),el('p',{class:'hint',text:meta.textContent}),reference&&reference.value?el('p',{text:reference.value}):null,richText(ta.value)].filter(Boolean));
   }},'Read note');
-  const prompts=el('details',{class:'writing-prompts'},el('summary',{text:'A little inspiration, if you need it'}));
-  ['What did I notice?','What does this teach me about Jehovah?','How could I apply it?','A question to explore'].forEach(text=>prompts.append(el('button',{type:'button',class:'pill',onclick:()=>{
-    const end=ta.value.length;setText(ta,end,end,(ta.value?'\n\n':'')+'## '+text+'\n',end+(ta.value?2:0)+text.length+4,false);ta.focus();
-  }},text)));
   const message=el('p',{class:'hint',role:'status'});
   const links=el('div',{class:'note-connections'});
   const paintLinks=()=>renderConnections(links,item(),src,()=>touch());
-  const extract=(kind)=>{
-    const selected=ta.value.slice(ta.selectionStart,ta.selectionEnd).trim();
-    if(!selected){message.textContent='Select the sentence or paragraph you want to save first.';return;}
-    if(kind==='application'){
-      if(isDay)edit('apply',selected);
-      else{if(!ta.value.includes('## My application\n'+selected)){const end=ta.value.length;setText(ta,end,end,'\n\n## My application\n'+selected,end+selected.length+20,false);}}
-      message.textContent='Application marked in this study.';return;
-    }
-    if(kind==='verse'){
-      const ref=prompt('Which scripture is this about?',isDay?reference.value:'');if(!ref)return;
-      const id=createItem('verses',{ref,text:selected,why:'',links:[src]});
-      addConnection(item(),{coll:'verses',id});touch();message.textContent='Saved in Scripture Treasury with a link to this study.';
-    }else{
-      const id=createItem('questions',{text:selected,ref:isDay?reference.value:'',links:[src]});
-      addConnection(item(),{coll:'questions',id});touch();message.textContent='Saved in Questions with a link to this study.';
-    }
-    paintLinks();
-  };
-  const selectionActions=el('div',{class:'selection-actions'},el('span',{class:'hint',text:'With selected text:'}),
-    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('question')},'Save question'),
-    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('verse')},'Save scripture'),
-    el('button',{type:'button',class:'link',onmousedown:e=>e.preventDefault(),onclick:()=>extract('application')},'Mark application'));
-  const saveNotebook=()=>{
-    const id=createItem('notes',{title:title.value||reference.value||'Study · '+draft.date,topic:reference.value,body:ta.value,links:[src]});
-    addConnection(item(),{coll:'notes',id});touch();paintLinks();message.textContent='Saved in Notebook and connected to this study.';
-  };
+  /* Personal study: the smaller boxes that go with the main notes */
+  const extras=[];
+  if(isDay&&session.habit==='study'){
+    const box=(prop,label,hint)=>{
+      const t=el('textarea',{class:'fmt','data-ownbar':'1',rows:2,id:'w-'+prop,'aria-label':label,placeholder:hint});
+      t.value=item()[prop]||'';
+      t.oninput=()=>{edit(prop,t.value);if(prop==='question') qBtn.disabled=!!item().qSaved||!t.value.trim();};
+      return el('div',{class:'field'},el('label',{for:'w-'+prop,text:label}),t);
+    };
+    const qBtn=el('button',{type:'button',class:'btn ghost',onclick:()=>{saveQuestion('study');if(item().qSaved){addConnection(item(),{coll:'questions',id:item().qSaved});touch();}qBtn.disabled=true;qBtn.textContent='Saved to Questions';paintLinks();}},
+      item().qSaved?'Saved to Questions':'Save to Questions');
+    qBtn.disabled=!!item().qSaved||!String(item().question||'').trim();
+    extras.push(box('apply','How I can apply it','Something specific I will do'),box('question','Question to look into next',''),el('div',{class:'actions'},qBtn));
+  }
   const close=el('button',{type:'button',class:'btn',onclick:()=>dialog.close()},'Done');
   dialog.append(el('div',{class:'writing-top'},el('button',{type:'button',class:'link',onclick:()=>dialog.close()},'← Back'),status,
     el('button',{type:'button',class:'link',onclick:()=>{dialog.classList.toggle('expanded');}},'Expand'),readBtn),
-    meta,title,reference,reflinks,toolbar,ta,preview,el('div',{class:'bar'},wordCount),prompts,selectionActions,
-    isDay?el('button',{type:'button',class:'btn ghost',onclick:saveNotebook},'Save a copy to Notebook'):null,
+    meta,title,...(reference?[reference]:[]),reflinks,toolbar,ta,preview,el('div',{class:'bar'},wordCount),...extras,
     links,message,el('div',{class:'writing-footer'},
-      el('button',{type:'button',class:'link',onclick:()=>downloadText('# '+(title.value||'Study note')+'\n\n'+meta.textContent+'\n\n'+reference.value+'\n\n'+ta.value,'study-note.md','text/markdown')},'Export note'),
+      el('button',{type:'button',class:'link',onclick:()=>downloadText('# '+(title.value||'Study note')+'\n\n'+meta.textContent+'\n\n'+(reference?reference.value+'\n\n':'')+ta.value,'study-note.md','text/markdown')},'Export note'),
       !isDay?el('button',{type:'button',class:'link danger',onclick:()=>{if(confirm('Move this note to Trash? You can restore it later.')){deleteItem(st);dialog.close();}}},'Move to Trash'):null,close));
   document.body.append(dialog);dialog.showModal();paintLinks();
   dialog.addEventListener('close',()=>{
@@ -2916,8 +2912,7 @@ function initStudySpace(){
     el('button',{type:'button',class:'btn ghost',onclick:openSearch},'Search everything'),
     el('button',{type:'button',class:'btn',onclick:quickNote},'+ Quick note'));
   document.querySelector('main').before(controls);
-  $('view-today').querySelector('.datenav').after(el('section',{id:'studyHome',class:'study-home'}));
-  const streaks=document.querySelector('[aria-label="Current streaks"]');document.querySelector('main').after(streaks);
+  $('habits').before(el('p',{id:'studyHome',class:'backup-reminder',role:'status',hidden:true}));
   document.querySelectorAll('.editor').forEach(editor=>{
     const st=Object.values(COLL).find(st=>st.ui.editor===editor);
     const connections=el('div',{class:'note-connections'});editor.append(connections);st.ui.connections=connections;

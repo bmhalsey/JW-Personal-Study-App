@@ -14,7 +14,7 @@ class StudyWorkflows(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.p = sync_playwright().start()
-        cls.browser = cls.p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+        cls.browser = cls.p.chromium.launch(executable_path=os.environ.get('STUDY_TEST_CHROMIUM', '/usr/bin/chromium'), args=['--no-sandbox'])
 
     @classmethod
     def tearDownClass(cls):
@@ -35,7 +35,7 @@ class StudyWorkflows(unittest.TestCase):
 
     def write_note(self, title='Patience', body='Learning to be patient.'):
         self.page.get_by_role('button', name='+ Quick note', exact=True).click()
-        self.page.get_by_label('Study title', exact=True).fill(title)
+        self.page.get_by_label('Note title', exact=True).fill(title)
         self.page.get_by_label('Study notes', exact=True).fill(body)
 
     def done(self):
@@ -46,9 +46,8 @@ class StudyWorkflows(unittest.TestCase):
         self.page.get_by_role('button', name='Settings', exact=True).click()
 
     def test_free_writing_formatting_and_offline_persistence(self):
-        self.page.get_by_role('button', name='Start studying', exact=True).click()
-        self.page.get_by_label('Study title', exact=True).fill('Patient like Jehovah')
-        self.page.get_by_label('Scripture or topic', exact=True).fill('James 5:7-8')
+        self.page.get_by_role('button', name='Write', exact=True).click()
+        self.page.locator('.writing-dialog').get_by_label('Topic', exact=True).fill('Patient like Jehovah')
         ta = self.page.get_by_label('Study notes', exact=True)
         ta.fill('Patience takes practice.')
         ta.evaluate('(t)=>t.setSelectionRange(0,8)')
@@ -60,22 +59,21 @@ class StudyWorkflows(unittest.TestCase):
         self.page.evaluate('navigator.serviceWorker.ready')
         self.context.set_offline(True)
         self.page.reload(wait_until='networkidle')
-        self.page.get_by_role('button', name='Continue studying', exact=True).click()
+        self.page.get_by_role('button', name='Continue writing', exact=True).click()
         expect(self.page.get_by_label('Study notes', exact=True)).to_have_value('**Patience** takes practice.')
-        expect(self.page.get_by_label('Study title', exact=True)).to_have_value('Patient like Jehovah')
+        expect(self.page.locator('.writing-dialog').get_by_label('Topic', exact=True)).to_have_value('Patient like Jehovah')
 
-    def test_selection_connections_and_global_search(self):
-        self.page.get_by_role('button', name='Start studying', exact=True).click()
-        ta = self.page.get_by_label('Study notes', exact=True)
-        ta.fill('How can I show patience?')
-        ta.evaluate('(t)=>t.setSelectionRange(0,t.value.length)')
-        self.page.get_by_role('button', name='Save question', exact=True).click()
+    def test_question_connections_and_global_search(self):
+        self.page.get_by_role('button', name='Write', exact=True).click()
+        self.page.get_by_label('Study notes', exact=True).fill('Patience grows over time.')
+        dialog = self.page.locator('.writing-dialog')
+        dialog.get_by_label('Question to look into next', exact=True).fill('How can I show patience?')
+        dialog.get_by_role('button', name='Save to Questions', exact=True).click()
         expect(self.page.locator('.writing-dialog .note-connections')).to_contain_text('How can I show patience?')
-        self.page.get_by_role('button', name='Save a copy to Notebook', exact=True).click()
         self.done()
         self.page.get_by_role('button', name='Search everything', exact=True).click()
         self.page.get_by_label('Search everything', exact=True).fill('patience')
-        expect(self.page.locator('.search-dialog .row')).to_have_count(3)
+        expect(self.page.locator('.search-dialog .row')).to_have_count(2)
         self.page.locator('.search-dialog .row').filter(has_text='Questions').click()
         expect(self.page.locator('.editor:visible .note-connections')).to_contain_text('Personal study')
 
@@ -128,20 +126,22 @@ class StudyWorkflows(unittest.TestCase):
         self.page.get_by_role('button', name='Notebook', exact=True).click()
         expect(self.page.locator('.collroot:visible .rows')).to_contain_text('Original')
 
-    def test_optional_tracking_prompts_and_layout(self):
-        self.assertTrue(self.page.locator('[aria-label="Current streaks"]').is_hidden())
-        self.settings()
-        self.page.get_by_label('Show streak counters', exact=True).check()
-        self.page.get_by_label('Show daily completion tracking', exact=True).check()
-        self.page.get_by_role('button', name='Back to Today', exact=True).click()
+    def test_tracking_on_by_default_one_way_to_write_and_layout(self):
         self.assertTrue(self.page.locator('[aria-label="Current streaks"]').is_visible())
+        self.assertTrue(self.page.locator('.progress').is_visible())
+        self.assertEqual(self.page.get_by_role('button', name='Write', exact=True).count(), 1)
+        self.settings()
+        self.page.get_by_label('Show streak counters', exact=True).uncheck()
+        self.page.get_by_role('button', name='Back to Today', exact=True).click()
+        self.assertTrue(self.page.locator('[aria-label="Current streaks"]').is_hidden())
         for width in [390, 768, 1280]:
             self.page.set_viewport_size({'width': width, 'height': 900})
             self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
-        self.page.get_by_role('button', name='Start studying', exact=True).click()
-        self.page.get_by_text('A little inspiration, if you need it', exact=True).click()
-        self.page.get_by_role('button', name='How could I apply it?', exact=True).click()
-        expect(self.page.get_by_label('Study notes', exact=True)).to_have_value('## How could I apply it?\n')
+        self.page.get_by_role('button', name='Write', exact=True).click()
+        ta = self.page.get_by_label('Study notes', exact=True)
+        ta.fill('What I noticed')
+        self.page.locator('.writing-toolbar').get_by_role('button', name='Heading', exact=True).click()
+        expect(ta).to_have_value('## What I noticed')
 
     def test_storage_failure_is_reported(self):
         self.page.evaluate("""() => { const original=Storage.prototype.setItem; Storage.prototype.setItem = function(k,v) { if(k.startsWith('dsl.doc:')) throw new DOMException('full','QuotaExceededError'); return original.call(this,k,v); }; }""")
@@ -156,9 +156,7 @@ class StudyWorkflows(unittest.TestCase):
         self.page.get_by_role('button', name='Search everything', exact=True).click()
         self.page.get_by_label('Search everything', exact=True).fill('creative')
         self.page.locator('.search-dialog .row').click()
-        expect(self.page.get_by_label('Study notes', exact=True)).to_have_value('Jehovah is creative')
-        self.done()
-        self.page.get_by_role('button', name='Study fields', exact=True).nth(1).click()
+        expect(self.page.locator('#d-bible-note')).to_have_value('Jehovah is creative')
         expect(self.page.locator('#d-bible-gems')).to_have_value('Order and purpose')
 
     def test_cloud_pending_status_and_reload_recovery_without_server_ack(self):
