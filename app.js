@@ -823,7 +823,7 @@ function buildHabits(){
         el('div',{class:'morewrap',id:'morewrap-'+k,hidden:true},moreF.map(mk)));
     }
     const actions=el('div',{class:'actions'});
-    if(hb.link) actions.append(el('a',{class:'btn ghost',id:'link-'+k,href:'https://wol.jw.org/en/wol/h/r1/lp-e',target:'_blank',rel:'noopener noreferrer',text:'Open the daily text on jw.org'}));
+    if(hb.link) actions.append(el('a',{class:'btn ghost',id:'link-'+k,href:libraryHref(S.sel),text:'Open the daily text in JW Library'}));
     if(hb.saveVerse) actions.append(el('button',{type:'button',class:'btn ghost',id:'saveverse',onclick:saveVerse},'Save verse to Treasury'));
     if(hb.saveQuestion) actions.append(el('button',{type:'button',class:'btn ghost',id:'saveq-'+k,onclick:()=>saveQuestion(k)},'Save to Questions'));
     if(hb.markRead) actions.append(el('button',{type:'button',class:'btn ghost',id:'markread',onclick:markChapters},'Mark chapters read'));
@@ -1874,11 +1874,16 @@ function dailyTextSection(){
     }
   });
   paintList();
+  const yNow=new Date().getFullYear();
+  const getLinks=el('div',{class:'actions'},[yNow,yNow+1].map(y=>
+    el('a',{class:'btn ghost',href:'https://www.jw.org/finder?wtlocale=E&pub=es'+String(y).slice(2),target:'_blank',rel:'noopener noreferrer'},'Get '+y+' from jw.org')));
   return el('section',{class:'setsec'},
     el('h3',{text:'Daily text'}),
     el('p',{text:"Load Examining the Scriptures Daily as an EPUB file from jw.org. Each day's scripture then shows in large letters at the top of Today, with the comments."}),
     el('p',{class:'hint',text:'The file stays on this device. It is not uploaded, synced or put in backups, so load it on each device you use. Load next year\'s book the same way when it comes out.'}),
-    list,el('div',{class:'actions'},pick),file,msg);
+    list,el('div',{class:'actions'},pick),file,msg,
+    el('p',{class:'hint',text:'Need the file? Open the book on jw.org, tap the download button, and choose EPUB. Then come back and load it here.'}),
+    getLinks);
 }
 function weekSection(D){
   const cb=el('input',{type:'checkbox',id:'s-family'});
@@ -2113,9 +2118,11 @@ async function importDailyText(file){
   paintDtHints();
   return y;
 }
-function libraryHref(k,d){
-  return k===todayKey()?'jwlibrary:///':'https://wol.jw.org/en/wol/h/r1/lp-e/'+k.slice(0,4)+'/'+(+k.slice(5,7))+'/'+(+k.slice(8,10));
-}
+/* The same link JW Library makes when you share a daily text, opened straight in the app.
+   webDailyHref is the jw.org version, for devices without JW Library. */
+const dtQuery=k=>'finder?srcid=jwlshare&wtlocale=E&prefer=lang&alias=daily-text&date='+k.replace(/-/g,'');
+const libraryHref=k=>'jwlibrary:///'+dtQuery(k);
+const webDailyHref=k=>'https://www.jw.org/'+dtQuery(k);
 function renderDailyCard(){
   const box=$('dtCard');
   if(!box) return;
@@ -2129,14 +2136,15 @@ function renderDailyCard(){
       el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>setTab('settings')},'Open Settings'));
     return;
   }
-  const isToday=k===todayKey();
   box.hidden=false;
   box.className='dtcard';
-  const main=el('a',{class:'dtmain',href:libraryHref(k,d),target:isToday?null:'_blank',rel:isToday?null:'noopener noreferrer'},
+  const main=el('a',{class:'dtmain',href:libraryHref(k),'aria-label':d.quote+' '+d.ref+'. Open this daily text in JW Library'},
     el('p',{class:'dtquote',text:d.quote}),
     el('p',{class:'dtref',text:d.ref}),
-    el('p',{class:'dtgo'},isToday?'Open in JW Library':'Open this day on jw.org',svg(ICON_OUT)));
-  const kids=[el('p',{class:'dtcap'},el('span',{text:'Daily text'}),el('span',{text:fmtShort(parseKey(k))})),main];
+    el('p',{class:'dtgo'},'Open in JW Library',svg(ICON_OUT)));
+  const kids=[el('p',{class:'dtcap'},el('span',{text:'Daily text'}),el('span',{text:fmtShort(parseKey(k))})),main,
+    el('p',{class:'hint',style:'margin:-6px 0 0'},'No JW Library on this device? ',
+      el('a',{href:webDailyHref(k),target:'_blank',rel:'noopener noreferrer'},'Read it on jw.org'))];
   if(d.isMemorial) kids.splice(1,0,el('p',{class:'dtmemo'},el('b',{text:'Memorial'}),' · after sundown'));
   if(d.memorial) kids.push(el('p',{class:'dtmemo',text:d.memorial}));
   const tg=el('button',{type:'button',class:'morebtn'+(DT.open?' open':''),'aria-expanded':String(DT.open),
@@ -2158,6 +2166,8 @@ function renderDailyCard(){
 }
 /* show the day's scripture in the empty boxes, and save it once the person starts writing */
 function paintDtHints(){
+  const lk=$('link-text');
+  if(lk) lk.href=libraryHref(draft.date);
   const d=dtFor(draft.date);
   const r=$('d-text-ref'),v=$('d-text-vtext');
   if(r) r.placeholder=d?d.ref:'For example, Psalm 37:4';
