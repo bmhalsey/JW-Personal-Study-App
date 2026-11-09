@@ -2020,11 +2020,13 @@ function aiSection(D,set){
 }
 function syncSection(D,set){
   const info=D.syncInfo();
-  const msg=el('p',{class:'hint',id:'s-syncmsg'});
-  const status=info.mode==='cloud'?'Sync is on. Signed in as '+info.email+'.':info.configured?'Sync is set up but not connected. '+(info.note||''):'Sync is off. Your entries stay on this device.';
-  const cfg=el('textarea',{id:'s-fb',rows:5,placeholder:'Paste the firebaseConfig block here',autocomplete:'off',spellcheck:'false'});
+  const msg=el('p',{class:'hint',id:'s-syncmsg',role:'status'});
+  const status=info.mode==='cloud'?'Signed in as '+info.email+'. Your notes stay in sync on every device where you sign in.'
+    :info.configured?'Not connected right now. '+(info.note||'')
+    :'Sign in to keep your notes in sync between your phone and computer. Until then, notes stay on this device only.';
+  const cfg=el('textarea',{id:'s-fb',rows:5,placeholder:'Leave empty to use this app\'s own sync. Only paste a firebaseConfig block to use a different Firebase project.',autocomplete:'off',spellcheck:'false'});
   cfg.value=set.firebase;
-  const email=el('input',{type:'text',id:'s-email',autocomplete:'username',placeholder:'Email'});
+  const email=el('input',{type:'text',id:'s-email',autocomplete:'username',inputmode:'email',placeholder:'Email'});
   const pw=el('input',{type:'password',id:'s-pw',autocomplete:'current-password',placeholder:'Password, 6 or more characters'});
   const saveCfg=()=>{
     const t=cfg.value.trim();
@@ -2034,7 +2036,8 @@ function syncSection(D,set){
   };
   const go=async create=>{
     if(!saveCfg()) return;
-    msg.textContent='Working...';
+    if(!email.value.trim()||!pw.value){msg.textContent='Enter your email and password first.';return;}
+    msg.textContent=create?'Creating your account...':'Signing in...';
     try{
       await D.cloudAuth(email.value.trim(),pw.value,create);
       msg.textContent='Signed in. Reloading...';
@@ -2043,37 +2046,37 @@ function syncSection(D,set){
       msg.textContent=D.friendlyAuthError(e);
     }
   };
-  const steps=el('details',{},el('summary',{text:'How to set up sync (about 10 minutes)'}),
-    el('ol',{class:'qlist'},
-      el('li',{text:'Go to console.firebase.google.com, sign in with a Google account, and choose Add project. Turn Google Analytics off.'}),
-      el('li',{text:'In the project, open Build, then Authentication, then Get started. Turn on Email/Password.'}),
-      el('li',{text:'Open Build, then Firestore Database, then Create database. Pick any location and start in production mode.'}),
-      el('li',{text:'In Firestore, open the Rules tab. Replace everything with the rules below, then Publish.'}),
-      el('li',{text:'Open Project settings (the gear), then General. Under Your apps, add a Web app. Copy the firebaseConfig block and paste it below.'}),
-      el('li',{text:'Create an account below with an email and password. Do the same on your other devices and sign in.'})),
+  const advanced=el('details',{},el('summary',{text:'Advanced: use a different Firebase project'}),
+    el('p',{class:'hint',text:'Not needed. This app already has its own sync. Only change this if you want your notes stored in a Firebase project of your own.'}),
+    labeled('Firebase config',cfg),
     el('pre',{class:'code',text:FB_RULES}),
-    el('p',{class:'hint',text:'If sign-in says this site is not authorized, add its address under Authentication, Settings, Authorized domains.'}));
-  const kids=[el('h3',{text:'Sync across devices'}),el('p',{class:'hint',id:'s-syncstatus',text:status}),steps];
+    el('p',{class:'hint',text:'Use these Firestore rules, and add this site under Authentication, Settings, Authorized domains.'}));
+  const kids=[el('h3',{text:'Sign in and sync'}),el('p',{class:'hint',id:'s-syncstatus',text:status})];
   if(info.mode==='cloud'){
+    const local=D.localDump();
+    if(local.length) kids.push(el('div',{class:'note'},
+      el('p',{text:'This device has '+local.length+' entries from before you signed in. Copy them into your account so they show on your other devices too.'})));
     kids.push(el('div',{class:'actions'},
-      el('button',{type:'button',class:'btn ghost',id:'s-copylocal',onclick:()=>{
+      el('button',{type:'button',class:local.length?'btn':'btn ghost',id:'s-copylocal',onclick:()=>{
         const list=D.localDump();
         if(!list.length){msg.textContent='Nothing on this device to copy.';return;}
         const n=importDocs(list);
-        msg.textContent='Copying '+n+' entries to sync. If both have the same day or item, this device\'s version replaces the synced one.';
-      }},'Copy this device\'s entries to sync'),
+        msg.textContent='Copying '+n+' entries into your account. If a day or item is in both places, this device\'s version is kept.';
+      }},'Copy this device\'s entries to my account'),
       el('button',{type:'button',class:'btn ghost',id:'s-signout',onclick:async()=>{
         try{await D.cloudSignOut();}catch(e){}
         location.reload();
-      }},'Sign out'),
-      el('button',{type:'button',class:'btn danger',id:'s-syncoff',onclick:()=>{D.saveSettings({firebase:''});location.reload();}},'Turn sync off')));
+      }},'Sign out')));
   }else{
-    kids.push(labeled('Firebase config',cfg),labeled('Email',email),labeled('Password',pw),
+    pw.addEventListener('keydown',e=>{if(e.key==='Enter') go(false);});
+    kids.push(labeled('Email',email),labeled('Password',pw),
       el('div',{class:'actions'},
         el('button',{type:'button',class:'btn',id:'s-signin',onclick:()=>go(false)},'Sign in'),
-        el('button',{type:'button',class:'btn ghost',id:'s-signup',onclick:()=>go(true)},'Create account')));
+        el('button',{type:'button',class:'btn ghost',id:'s-signup',onclick:()=>go(true)},'Create account')),
+      el('p',{class:'hint',text:'First time? Tap Create account on one device, then use Sign in with the same email and password on your others.'}));
   }
   kids.push(msg);
+  if(info.mode!=='cloud'||!info.builtIn) kids.push(advanced);
   return el('section',{class:'setsec'},kids);
 }
 function backupSection(){

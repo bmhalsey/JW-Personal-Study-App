@@ -144,13 +144,18 @@ async function loadFirebase(){
   await loadScript(base+'firebase-app-compat.js');
   await Promise.all([loadScript(base+'firebase-auth-compat.js'),loadScript(base+'firebase-firestore-compat.js')]);
 }
+/* This app's own Firebase project. These values only identify the project and are meant
+   to be public; the Firestore rules keep each person's notes readable only by them. */
+const BUILT_IN_FIREBASE='apiKey:"AIzaSyBnMtumBZwPh11LMoZeCyjDlU7Jr3_Ed4c",authDomain:"jw-personal-study-app.firebaseapp.com",projectId:"jw-personal-study-app",storageBucket:"jw-personal-study-app.firebasestorage.app",messagingSenderId:"528049186953",appId:"1:528049186953:web:dbae3f44402f792749fe58"';
+/* a config pasted in Settings wins; otherwise the built-in one */
+function fbConfigText(){return String(settings.firebase||'').trim()||BUILT_IN_FIREBASE;}
 function parseFbConfig(text){
   const cfg={};
   String(text||'').replace(/["']?(\w+)["']?\s*:\s*["']([^"']*)["']/g,(m,k,v)=>{cfg[k]=v;return m;});
   return (cfg.apiKey&&cfg.projectId)?cfg:null;
 }
 async function fbInit(){
-  const cfg=parseFbConfig(settings.firebase);
+  const cfg=parseFbConfig(fbConfigText());
   if(!cfg) throw Object.assign(new Error('config'),{code:'bad_config'});
   await withTimeout(loadFirebase(),15000);
   if(!window.firebase.apps.length) window.firebase.initializeApp(cfg);
@@ -215,7 +220,7 @@ window.addEventListener('storage',e=>{
   }
 });
 async function connectCloud(){
-  const cfg=parseFbConfig(settings.firebase);
+  const cfg=parseFbConfig(fbConfigText());
   const fb=await fbInit();
   const auth=fb.auth();
   const user=await withTimeout(new Promise(res=>{
@@ -236,8 +241,10 @@ async function cloudAuth(email,pw,create){
   const auth=fb.auth();
   if(create) await auth.createUserWithEmailAndPassword(email,pw);
   else await auth.signInWithEmailAndPassword(email,pw);
+  saveSettings({signedIn:true});
 }
 async function cloudSignOut(){
+  saveSettings({signedIn:false});
   const fb=await fbInit();
   await fb.auth().signOut();
 }
@@ -255,7 +262,10 @@ function friendlyAuthError(e){
 }
 
 async function connect(){
-  state.configured=!!String(settings.firebase||'').trim();
+  /* only reach out to Firebase on a device that has signed in, so the app opens instantly
+     (and offline) everywhere else */
+  state.configured=!!String(settings.firebase||'').trim()||!!settings.signedIn;
+  state.builtIn=!String(settings.firebase||'').trim();
   if(state.configured){
     try{
       const c=await connectCloud();
@@ -338,7 +348,7 @@ window.DSL={
   saveSettings:saveSettings,
   connect:connect,
   sample:sample,
-  syncInfo:()=>({configured:state.configured,mode:state.mode,email:state.email,note:state.note}),
+  syncInfo:()=>({configured:state.configured,builtIn:!String(settings.firebase||'').trim(),mode:state.mode,email:state.email,note:state.note}),
   cloudAuth:cloudAuth,
   cloudSignOut:cloudSignOut,
   friendlyAuthError:friendlyAuthError,
