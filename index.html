@@ -81,8 +81,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .streak.on b{color:var(--gold)}
 .streak span{font-size:13px;color:var(--muted)}
 
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
-.tabs button{border:0;background:transparent;color:var(--muted);font:600 14px var(--font-body);min-height:44px;padding:8px 4px;border-radius:9px;cursor:pointer}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:4px;background:var(--sunken);border-radius:12px}
+.tabs button{position:relative;border:0;background:transparent;color:var(--muted);font:600 14px var(--font-body);min-height:44px;padding:8px 4px;border-radius:9px;cursor:pointer}
 .tabs button[aria-current="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px var(--shadow)}
 
 .view{display:flex;flex-direction:column;gap:16px}
@@ -384,6 +384,84 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .scrsrc i{font-style:normal;padding:1px 8px;border-radius:999px;background:var(--sunken);color:var(--accent)}
 .scrsnip{font-size:15px;overflow-wrap:anywhere}
 .refchips{display:flex;flex-wrap:wrap;gap:6px}
+/* groups */
+.tabs .badge{position:absolute;top:3px;right:4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;line-height:17px;text-align:center}
+.ghead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.ghead .sect{margin:0}
+.gintro{margin:-4px 0 0}
+.gmsg{margin:0;padding:10px 12px;border-radius:10px;background:var(--sunken);font-size:15px}
+.gcard{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.gcard h3,.gcard p{margin:0}
+.gcard.invite{border-color:var(--gold)}
+.gbtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.gbtns .btn{width:100%}
+.grp-card{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);text-align:left;font:16px/1.4 var(--font-body);cursor:pointer;width:100%}
+.grp-card:hover{border-color:var(--accent)}
+.grp-top{display:flex;align-items:center;gap:10px}
+.grp-top b{flex:1;font:700 20px/1.2 var(--font-display,inherit)}
+.gnew{font-size:13px;font-weight:700;color:var(--gold)}
+.grp-mid{display:flex;align-items:center;gap:16px}
+.grp-sum{font-size:14px}
+.av{flex:none;width:34px;height:34px;border-radius:50%;display:inline-grid;place-items:center;font-size:13px;font-weight:700;color:#fff}
+.avs{display:flex}
+.avs .av{width:32px;height:32px;margin-right:-8px;border:2px solid var(--surface)}
+.avs .av.more{background:var(--muted)}
+.gday{margin:0;font-weight:600;text-align:center;flex:1}
+.gdt .cap{margin:0}
+.gdtline{font:700 21px/1.3 var(--font-display,inherit);color:var(--fg);text-decoration:none}
+.gdtline i{font-style:italic}
+.gdtline.muted{font:16px/1.4 var(--font-body);color:var(--muted)}
+.gpeople{display:flex;flex-direction:column;gap:8px}
+.gpeople .cap,.gpeople .hint{margin:0}
+.whorow{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px}
+.who{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px;padding:4px 2px;border:0;border-radius:10px;background:none;color:var(--muted);font:12px/1.2 var(--font-body);text-align:center;cursor:pointer}
+.who[aria-pressed="true"]{background:var(--sunken)}
+.who b{font-size:13px;color:var(--fg);max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ring{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;border:3px solid var(--line)}
+.ring.on{border-color:var(--accent)}
+.gperson{margin:0;padding:10px 12px;border-radius:10px;background:var(--sunken);display:flex;flex-direction:column;gap:2px}
+.gperson p{margin:0}
+.gsub{margin:8px 0 0;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.post{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.post.hidden-post{opacity:.6}
+.gph{display:flex;align-items:center;gap:10px}
+.phw{flex:1;display:flex;flex-direction:column;line-height:1.25}
+.phw b{font-size:15px}
+.gtext{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.acts{display:flex;align-items:center;gap:8px}
+.react{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font:600 14px var(--font-body);cursor:pointer}
+.react svg path{fill:none;stroke:var(--muted);stroke-width:1.8}
+.react.mine{background:color-mix(in srgb,var(--gold) 18%,transparent);border-color:var(--gold)}
+.react.mine svg path{fill:var(--gold);stroke:var(--gold)}
+.reply{display:flex;gap:8px;align-items:flex-start;padding-left:12px;border-left:2px solid var(--line)}
+.reply .av{width:28px;height:28px;font-size:12px}
+.rw{flex:1;display:flex;flex-direction:column}
+.rw b{font-size:14px}
+.rw .gtext{font-size:15px}
+.replyin{display:flex;gap:8px;align-items:flex-end}
+.replyin textarea{flex:1;min-height:44px;resize:vertical}
+.gcode{font:700 28px/1.2 var(--font-display,inherit);letter-spacing:.12em;text-align:center;padding:12px;border-radius:10px;background:var(--sunken)}
+.mems{display:flex;flex-direction:column}
+.mem{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid var(--line)}
+.mem:last-child{border-bottom:0}
+.mn{flex:1;display:flex;flex-direction:column}
+.mn small{font-size:12px;color:var(--muted)}
+.rm{min-height:34px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--danger);font:600 13px var(--font-body);cursor:pointer}
+.btn.danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}
+.codein{text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+.gyours{background:var(--sunken);border-style:dashed}
+.shareline{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--sunken);color:var(--accent)}
+.shareline span{flex:1;font-size:14px;color:var(--fg)}
+.shareline .link{font-size:14px}
+.shared-note{margin:4px 0 0}
+.sharepanel{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;margin-top:6px}
+.sharepanel .link{align-self:flex-start;margin-top:4px}
+#dtShare:empty{display:none}
+.nstate{margin:0;font-weight:600}
+.nstate.on{color:var(--accent)}
+.nrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.checkrow label small{display:block}
+@media (max-width:420px){.tabs button{font-size:13px;padding:8px 2px}}
 .pathpick{display:flex;flex-direction:column;gap:6px}
 .pathpick .hint{margin:0}
 .topicwrap{display:flex;flex-direction:column;gap:12px}
@@ -591,6 +669,7 @@ input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:tr
   <nav class="tabs" aria-label="Sections">
     <button type="button" data-tab="today" aria-current="true">Today</button>
     <button type="button" data-tab="week" aria-current="false">Week</button>
+    <button type="button" data-tab="groups" aria-current="false">Groups</button>
     <button type="button" data-tab="library" aria-current="false">Library</button>
     <button type="button" data-tab="review" aria-current="false">Review</button>
   </nav>
@@ -659,6 +738,8 @@ input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:tr
       </div>
     </section>
 
+    <section class="view" id="view-groups" hidden></section>
+
     <section class="view" id="view-settings" hidden></section>
   </main>
 </div>
@@ -667,5 +748,6 @@ input.writing-title{font:700 32px/1.3 var(--font-display);border:0;background:tr
 <script src="adapters.js"></script>
 <script src="intros.js"></script>
 <script src="app.js"></script>
+<script src="together.js"></script>
 </body>
 </html>

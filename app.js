@@ -9,6 +9,7 @@ const HABITS=[
       {prop:'vtext',label:'Scripture',bare:true,multi:true,noChips:true,hint:'The scripture, typed or pasted'},
       {type:'slot',id:'dtExtra'}]},
     {prop:'note',label:'Comment',multi:true,rows:4,hint:'The main point of the comments, or your own thoughts'},
+    {type:'slot',id:'dtShare'},
     /* older entries may have this; it only shows when it has something in it */
     {prop:'apply',label:'How I can use it',multi:true,showIf:s=>!!String(s.apply||'').trim()}]},
   /* Bible reading: the three main questions change with the kind of book (see KINDS);
@@ -1140,7 +1141,7 @@ const WK=makeDocForm('week','weeks',WEEK_FIELDS,normWeek);
 WK.onPaint=()=>{renderWeekReview();renderPlanBox();renderWeekTiles();};
 WK.onField=p=>{
   if(p==='myReading') renderPlanBox();
-  if(p==='reading'){renderPlanBox();if(window.SLG) window.SLG.shareWeekly(WK.draft.start,nz(WK.draft.reading));}
+  if(p==='reading'){renderPlanBox();try{if(window.SLG) window.SLG.shareWeekly(WK.draft.start,nz(WK.draft.reading));}catch(e){}}
 };
 const MO=makeDocForm('month','months',MONTH_FIELDS,normMonth);
 const MIN=makeDocForm('min','ministry',MIN_FIELDS,normMin);
@@ -1189,6 +1190,7 @@ function commitDay(){
   dayBase=clone(full);
   if(!changed) return;
   enqueue('days',draft.date,full,write);
+  try{if(window.SLG) window.SLG.dayChanged(full);}catch(e){}
 }
 /* On a computer, Today's right side shows one section at a time, picked with these tabs */
 const WIDE=window.matchMedia?matchMedia('(min-width:1000px)'):{matches:false,addEventListener(){}};
@@ -2079,6 +2081,7 @@ function saveBible(){
   S.bible.updatedAt=Date.now();
   setStatus('Saving...');
   enqueue('progress','bible',clone(S.bible));
+  try{if(window.SLG) window.SLG.progressChanged();}catch(e){}
 }
 function setBookRead(i,set){
   if(set.size) S.bible.read[String(i)]=Array.from(set).sort((a,b)=>a-b);
@@ -2557,7 +2560,7 @@ function syncSection(D,set){
     el('p',{class:'hint',text:'Not needed. This app already has its own sync. Only change this if you want your notes stored in a Firebase project of your own.'}),
     labeled('Firebase config',cfg),
     el('pre',{class:'code',text:FB_RULES}),
-    el('p',{class:'hint',text:'Use these Firestore rules, and add this site under Authentication, Settings, Authorized domains.'}));
+    el('p',{class:'hint',text:'Use these Firestore rules, and add this site under Authentication, Settings, Authorized domains. For groups and notifications, use the full rules in firestore.rules and the functions folder from the app\'s GitHub repository.'}));
   const kids=[el('h3',{text:'Sign in and sync'}),el('p',{class:'hint',id:'s-syncstatus',text:status})];
   if(info.mode==='cloud'){
     const local=D.localDump();
@@ -2584,7 +2587,7 @@ function syncSection(D,set){
   }
   kids.push(msg);
   if(info.mode!=='cloud'||!info.builtIn) kids.push(advanced);
-  return el('section',{class:'setsec'},kids);
+  return el('section',{class:'setsec',id:'syncSection'},kids);
 }
 function backupSection(){
   const area=el('textarea',{id:'s-backup',rows:5,placeholder:'Paste a Study Log backup here to restore it.',autocomplete:'off',spellcheck:'false','aria-label':'Backup JSON'});
@@ -2866,7 +2869,7 @@ function remindersSection(){
   const link=new URL('./',location.href).href;
   return el('section',{class:'setsec'},
     el('h3',{text:'Reminders'}),
-    el('p',{class:'hint',text:'Use the free Shortcuts app on your iPhone to open the Study Log at the same time every day.'}),
+    el('p',{class:'hint',text:'Notifications (above) can remind you once you are signed in. Without an account, use the free Shortcuts app on your iPhone to open the Study Log at the same time every day.'}),
     el('ol',{class:'qlist'},
       el('li',{text:'Open the Shortcuts app, tap Automation, then New Automation (or +).'}),
       el('li',{text:'Choose Time of Day, pick a time such as 7:00 AM, and choose Daily.'}),
@@ -2894,7 +2897,8 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    displaySection(D),preferencesSection(),pathSection(),dailyTextSection(),weekSection(D),remindersSection(),syncSection(D,D.settings),lockSection(D),aiSection(D,D.settings),backupSection(),trashSec,installSection());
+    displaySection(D),preferencesSection(),pathSection(),dailyTextSection(),weekSection(D),
+    window.SLG?window.SLG.shareSection():null,window.SLG?window.SLG.notifySection():null,remindersSection(),syncSection(D,D.settings),lockSection(D),aiSection(D,D.settings),backupSection(),trashSec,installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -2905,13 +2909,14 @@ function showSyncNote(note){
 function setTab(t){
   S.tab=t;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.tab===t)));
-  ['today','week','library','review','settings'].forEach(x=>{$('view-'+x).hidden=x!==t;});
+  ['today','week','groups','library','review','settings'].forEach(x=>{$('view-'+x).hidden=x!==t;});
   flushAll();
   if(t==='today') renderHome();
   if(t==='week'){WK.load(S.weekSel);MIN.load(minMonth());renderWeek();}
   if(t==='library') showLib();
   if(t==='review') showRev();
   if(t==='settings') renderSettings();
+  if(t==='groups'&&window.SLG) window.SLG.show();
 }
 function showRev(){
   const defs=[['quiz','Quiz'],['verses','Verses'],['month','Month'],['history','History']];
@@ -3164,6 +3169,7 @@ function renderDailyCard(){
 function paintDtHints(){
   const lk=$('link-text');
   if(lk) lk.href=libraryHref(draft.date);
+  try{if(window.SLG) window.SLG.paintShare($('dtShare'),draft.date);}catch(e){}
   const d=dtFor(draft.date);
   const r=$('d-text-ref'),v=$('d-text-vtext');
   if(r) r.placeholder='For example, Psalm 37:4';
@@ -3912,6 +3918,20 @@ renderToday();
 renderLibTabs();
 setTab('today');
 setStatus('Loading your entries...');
+/* what together.js (groups and notifications) uses from here */
+window.SLAPP={el:el,svg:svg,ICON_LEFT:ICON_LEFT,ICON_RIGHT:ICON_RIGHT,$:$,todayKey:todayKey,keyOf:keyOf,parseKey:parseKey,addDays:addDays,mondayOf:mondayOf,fmtDay:fmtDay,nz:nz,cut:cut,
+  dtFor:dtFor,dtLine:dtLine,findRefs:findRefs,refHref:refHref,libraryHref:libraryHref,setTab:setTab,setStatus:setStatus,labeled:labeled,
+  tab:()=>S.tab,
+  day:k=>eff()[k]||null,
+  streak:key=>streakFor(key,eff()),
+  readInfo:()=>{
+    const p=readPath(),ti=topicInfo();
+    return {path:p,label:p==='topics'?(ti?'Topic: '+ti.t.label:'Reading by topic'):p==='workbook'?'Meeting Workbook reading':'Reading the whole Bible',read:countRead(),total:TOTAL_CH};
+  },
+  openDay:(k,habit)=>{setTab('today');openTarget({coll:'days',id:k,habit:habit||'text'});},
+  refreshPlan:()=>{if(S.tab==='week') renderPlanBox();renderToday();renderTodayChapters();},
+  goSettings:id=>{setTab('settings');const b=$(id);if(b) b.scrollIntoView({block:'start'});}
+};
 
 (async function connect(){
   const slow=setTimeout(()=>{if(!S.fresh) setStatus('Still loading your entries...');},10000);
@@ -3920,6 +3940,7 @@ setStatus('Loading your entries...');
   S.connecting=false;
   if(!conn||!conn.root){
     clearTimeout(slow);
+    window.SLAPP.conn={mode:'none'};
     S.fresh=true;
     setStatus('Saving is not available in this browser.','err');
     renderToday();
@@ -3958,5 +3979,8 @@ setStatus('Loading your entries...');
     const inCloud=new Set(snap.docs.map(d=>d.id));
     Object.keys(DT.years).filter(y=>!inCloud.has(y)&&!DT.uploaded[y]).forEach(y=>{DT.uploaded[y]=true;S.root.collection('dailytext').doc(y).set(DT.years[y]).catch(()=>{});});
   },()=>{});
+  /* groups and notifications (together.js) start once the connection is known */
+  window.SLAPP.conn={mode:S.mode};
+  try{if(window.SLG) window.SLG.start();}catch(e){}
 })();
 })();

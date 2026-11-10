@@ -199,5 +199,21 @@ class StudyWorkflows(unittest.TestCase):
         expect(self.page.locator('#s-backupmsg')).to_contain_text('invalid entry')
         self.assertTrue(self.page.locator('#s-restoreyes').is_hidden())
 
+    def test_reading_by_topic_and_signed_out_groups(self):
+        self.page.get_by_role('button', name='Week', exact=True).click()
+        self.page.get_by_role('button', name='By topic', exact=True).click()
+        self.page.get_by_role('button', name='The last days', exact=True).click()
+        expect(self.page.locator('#planBox')).to_contain_text('2 Timothy 3:1-5')
+        self.page.get_by_role('button', name='Today', exact=True).click()
+        expect(self.page.locator('#weekHint')).to_contain_text('Reading by topic: The last days')
+        self.page.locator('#toggle-bible').click()
+        self.page.locator('#todayCh input[type=checkbox]').check()
+        expect(self.page.locator('#progressText')).to_contain_text('1 of 3')
+        self.page.reload(wait_until='networkidle')
+        self.page.get_by_role('button', name='Week', exact=True).click()
+        expect(self.page.locator('.topiccard .cap')).to_have_text('The last days · 1 of 5 read')
+        self.page.get_by_role('button', name='Groups', exact=True).click()
+        expect(self.page.get_by_role('button', name='Sign in or create an account')).to_be_visible()
+
 if __name__ == '__main__':
     unittest.main()
