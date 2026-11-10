@@ -1,0 +1,16 @@
+{
+  "name": "study-log-functions",
+  "private": true,
+  "description": "Sends the Study Log's notifications: hearts and replies in groups, and daily reminders.",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test test/logic.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^7.0.0"
+  }
+}

@@ -32,6 +32,29 @@ python3 -m http.server 8000 --bind 127.0.0.1
 - Settings: an optional privacy PIN (only while signed in, so it can be reset), an iPhone Shortcuts reminder guide, and daily text books saved privately to the signed-in account.
 - `.github/workflows/tests.yml` runs the syntax checks, storage tests and browser tests on every push.
 
+## Reading paths, groups and notifications
+
+- **Reading paths** (Week, My Bible reading, or Settings): the whole Bible in order, the Meeting Workbook's weekly reading, or **By topic**: eight topics like those on jw.org's Bible Teachings pages, five short readings each, with JW Library links. The Memorial Bible reading from the daily text book is added on top in the days before the Memorial (it can be turned off).
+- **Groups** (`together.js`, needs sign-in): start a group, invite people with a link or an 8-character code, and see each other's daily text comments, hearts, replies and progress rings. Daily text comments are shared by default; progress is shared unless turned off; Bible reading notes only if turned on. Anyone can leave; whoever starts a group can rename it, make a new code, remove people and hide comments. One person's Meeting Workbook reading fills in for everyone in the group.
+- **Notifications**: reminders for the daily text and Bible reading at chosen times (skipped when already done), Saturday planning, a monthly backup reminder, and instant notices for hearts and replies. They are sent by the Cloud Functions in `functions/` through Firebase Cloud Messaging. On iPhone they need the app on the Home Screen (iOS 16.4 or later).
+- `firestore.rules` decides who can read and write what: your own notes stay yours, and a group's posts are visible only to its members. `tests/firebase/rules.test.mjs` checks those rules on the Firebase emulator.
+
+### One-time setup for groups and notifications
+
+1. **Upgrade the Firebase project to the Blaze plan** (Firebase console, bottom left, Upgrade). Scheduled functions need it. For a family-sized group, use stays inside the free amounts. In the Google Cloud console, under Billing, Budgets and alerts, set a $1 budget alert so you hear about any charge.
+2. **Create the web push key**: Firebase console, Project settings, Cloud Messaging, Web Push certificates, Generate key pair. Put the key in `BUILT_IN_VAPID` in `together.js` (it is a public key). Until then it can be pasted in Settings, Notifications, on one device to try it.
+3. **Deploy the rules and the functions** from Google Cloud Shell (shell.cloud.google.com, signed in with the account that owns the Firebase project):
+
+   ```sh
+   git clone https://github.com/bmhalsey/JW-Personal-Study-App.git
+   cd JW-Personal-Study-App/functions && npm install && cd ..
+   npx -y firebase-tools@latest login --no-localhost
+   npx -y firebase-tools@latest deploy --project jw-personal-study-app --only firestore:rules,functions --force
+   ```
+
+   The first deploy turns on the Google services it needs and can take several minutes. If it stops with a message about permissions still being set up, wait five minutes and run the last command again. The functions run in `us-central1`, which matches a `nam5` (United States) database; for another database location, change `REGION` in `functions/index.js`.
+4. Run the deploy command again whenever `firestore.rules` or `functions/` change.
+
 ## Saving and recovery
 
 Local notes save automatically to this browser. Keep backups outside the browser: clearing site data removes local notes and pending changes.
@@ -49,7 +72,10 @@ node --check app.js
 node --check adapters.js
 node --check sw.js
 node --check intros.js
+node --check together.js
 node --test tests/storage.test.cjs
+node --test functions/test/logic.test.js
+(cd tests/firebase && npm install && npm test)   # security rules, needs Java
 python3 -m unittest discover -s tests -v
 ```
 

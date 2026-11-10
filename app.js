@@ -9,6 +9,7 @@ const HABITS=[
       {prop:'vtext',label:'Scripture',bare:true,multi:true,noChips:true,hint:'The scripture, typed or pasted'},
       {type:'slot',id:'dtExtra'}]},
     {prop:'note',label:'Comment',multi:true,rows:4,hint:'The main point of the comments, or your own thoughts'},
+    {type:'slot',id:'dtShare'},
     /* older entries may have this; it only shows when it has something in it */
     {prop:'apply',label:'How I can use it',multi:true,showIf:s=>!!String(s.apply||'').trim()}]},
   /* Bible reading: the three main questions change with the kind of book (see KINDS);
@@ -65,8 +66,9 @@ const joinSum=(parts,empty)=>parts.filter(Boolean).join(' · ')||empty;
 /* Week page. Cards marked collapse fold up to a one-line summary; fields marked head stay
    visible in the card's header. The two col groups become side-by-side columns on computers. */
 const WEEK_FIELDS=[
-  {type:'group',style:'card',id:'planCard',label:'My Bible reading',note:'Your own reading through the Bible. Plan it a week ahead; each day fills in from Today.',fields:[
-    {prop:'myReading',label:'Reading for this week',hint:'For example, Genesis 12-17'},
+  {type:'group',style:'card',id:'planCard',label:'My Bible reading',fields:[
+    {type:'slot',id:'pathPick'},
+    {prop:'myReading',label:'Reading for this week',hint:'For example, Genesis 12-17',showIf:()=>readPath()==='whole'},
     {type:'slot',id:'planBox'}]},
   {type:'slot',id:'weekTiles'},
   {type:'group',style:'col',id:'colMain',fields:[
@@ -134,6 +136,30 @@ const MIN_FIELDS=[{type:'group',style:'card',collapse:true,gid:'min',label:'Mini
     {prop:'studies',label:'Bible studies',inputmode:'numeric'},
     {prop:'hours',label:'Hours',hint:'If you pioneer',inputmode:'decimal'}]},
   {prop:'followups',label:'Follow-ups to make',multi:true,hint:'What you talked about and what to bring next time. No names or addresses.'}]}];
+/* Reading paths. The whole Bible in order is the default; the Meeting Workbook path uses the
+   week's assigned reading; topics are a few days of short readings each. The Memorial season
+   readings from the daily text book can be added on top of any of them. */
+const PATHS=[['whole','Whole Bible'],['workbook','Workbook'],['topics','By topic']];
+/* Topics like the ones on jw.org's Bible Teachings pages. The readings are chosen here and the
+   descriptions are in our own words; "Read more" searches jw.org for the topic. */
+const TOPICS=[
+  {id:'anxiety',label:'Worry and anxiety',q:'anxiety',about:'When worries pile up, these readings show how to give them to Jehovah and where real calm comes from.',days:[
+    ['Philippians 4:6, 7','Pray about everything'],['Matthew 6:25-34','One day at a time'],['1 Peter 5:6, 7','He cares for you'],['Psalm 55:22','Throw your burden on Jehovah'],['Isaiah 41:10','Do not be afraid']]},
+  {id:'lastdays',label:'The last days',q:'last days',about:'When world news is troubling, these readings show what the Bible said our times would be like, and the hope beyond them.',days:[
+    ['2 Timothy 3:1-5','What people would be like'],['Matthew 24:3-14','The sign Jesus gave'],['Luke 21:25-28','How to react'],['Daniel 2:44','The Kingdom that will last'],['Revelation 21:3-5','What comes next']]},
+  {id:'hope',label:'Hope for the future',q:'hope for the future',about:"What Jehovah has promised for the earth and for the people on it.",days:[
+    ['Psalm 37:9-11','The meek will possess the earth'],['Isaiah 65:21-25','Homes and work that last'],['Isaiah 35:5, 6','Health restored'],['John 5:28, 29','Those in the memorial tombs'],['Revelation 21:3, 4','No more death or pain']]},
+  {id:'family',label:'Family life',q:'family',about:"Jehovah started the family. These readings show what makes a home happy.",days:[
+    ['Genesis 2:18-24','How the family began'],['Ephesians 5:28-33','Love and respect'],['Colossians 3:12-14','Clothe yourselves with love'],['Ephesians 6:1-4','Parents and children'],['Deuteronomy 6:5-7','Teaching at home']]},
+  {id:'grief',label:'Grief and loss',q:'grief',about:'When someone we love dies, the Bible gives comfort that is real, and a hope that is sure.',days:[
+    ['John 11:32-44','Jesus wept'],['Ecclesiastes 9:5, 10','The condition of the dead'],['Psalm 34:18','Near to the brokenhearted'],['2 Corinthians 1:3, 4','The God of all comfort'],['Acts 24:15','A resurrection']]},
+  {id:'unfair',label:'When life feels unfair',q:'why does God allow suffering',about:'Why bad things happen, and why we can still trust that Jehovah is just.',days:[
+    ['Ecclesiastes 9:11','Time and unforeseen occurrence'],['James 1:13','God does not test us with evil'],['Psalm 73:1-17','When the wicked seem to do well'],['Deuteronomy 32:4','All his ways are justice'],['Romans 12:17-21','Leave it to Jehovah']]},
+  {id:'faith',label:'Staying strong in faith',q:'faith',about:'What faith is, and how to keep it strong when life gets hard.',days:[
+    ['Hebrews 11:1-6','What faith is'],['Hebrews 12:1-3','Run with endurance'],['James 1:2-5','Trials can help us grow'],['1 Corinthians 10:13','A way out'],['Psalm 1:1-3','Like a tree by the water']]},
+  {id:'others',label:'Getting along with others',q:'forgiveness',about:'Making peace, forgiving, and being patient with the people around us.',days:[
+    ['Matthew 5:23, 24','Make peace first'],['Matthew 18:21, 22','How many times to forgive'],['Proverbs 19:11','Overlook an offense'],['Romans 12:17, 18','Be peaceable with all'],['Ephesians 4:31, 32','Kind and compassionate']]}
+];
 function flatFields(fs){
   const o=[];
   fs.forEach(f=>{if(f.type==='group') o.push(...flatFields(f.fields)); else if(f.prop) o.push(f);});
@@ -192,6 +218,7 @@ function deepVisible(s){
 }
 /* "What I read" is only needed when you read something other than today's plan */
 function showReadBox(s){
+  if(readPath()==='topics'&&!offPlan.has(draft.date)){const ti=topicInfo();return !!nz(s.ref)&&!(ti&&ti.t.days.some(d=>d[0]===nz(s.ref)));}
   const chs=todayChapters(draft.date);
   if(!chs.length||offPlan.has(draft.date)) return true;
   return !!nz(s.ref)&&nz(s.ref)!==rangeLabel(chs[0],chs[chs.length-1]);
@@ -1112,7 +1139,10 @@ function makeDocForm(key,coll,fields,norm){
 }
 const WK=makeDocForm('week','weeks',WEEK_FIELDS,normWeek);
 WK.onPaint=()=>{renderWeekReview();renderPlanBox();renderWeekTiles();};
-WK.onField=p=>{if(p==='myReading') renderPlanBox();};
+WK.onField=p=>{
+  if(p==='myReading') renderPlanBox();
+  if(p==='reading'){renderPlanBox();try{if(window.SLG) window.SLG.shareWeekly(WK.draft.start,nz(WK.draft.reading));}catch(e){}}
+};
 const MO=makeDocForm('month','months',MONTH_FIELDS,normMonth);
 const MIN=makeDocForm('min','ministry',MIN_FIELDS,normMin);
 const minMonth=()=>monthOf(parseKey(S.weekSel));
@@ -1160,6 +1190,7 @@ function commitDay(){
   dayBase=clone(full);
   if(!changed) return;
   enqueue('days',draft.date,full,write);
+  try{if(window.SLG) window.SLG.dayChanged(full);}catch(e){}
 }
 /* On a computer, Today's right side shows one section at a time, picked with these tabs */
 const WIDE=window.matchMedia?matchMedia('(min-width:1000px)'):{matches:false,addEventListener(){}};
@@ -1331,9 +1362,10 @@ function renderToday(){
   $('next').disabled=S.sel>=t;
   $('jumpWrap').hidden=S.sel===t;
   $('firstRun').hidden=!(S.fresh&&Object.keys(S.days).length===0&&!HABITS.some(hb=>hasContent(draft[hb.key])));
-  const plan=todayPlan(S.sel);
+  let plan=todayPlan(S.sel);
+  if(readPath()==='topics'){const ti=topicInfo(),i=topicNext(ti);plan=ti&&i>=0?{week:ti.t.label,today:ti.t.days[i][0]}:null;}
   $('weekHint').hidden=!plan;
-  $('weekHint').textContent=plan?"This week's reading: "+plan.week+(plan.today?'. Today: '+plan.today+'.':'. Today: catch up or review.'):'';
+  $('weekHint').textContent=plan&&readPath()==='topics'?'Reading by topic: '+plan.week+'. Next: '+plan.today+'.':plan?"This week's reading: "+plan.week+(plan.today?'. Today: '+plan.today+'.':'. Today: catch up or review.'):'';
   const ph=$('d-bible-ref');
   if(ph) ph.placeholder=(plan&&plan.today)||'For example, Genesis 1-2';
   renderProgress();
@@ -1956,18 +1988,34 @@ function planDays(weekStart,text){
   return days;
 }
 function todayPlan(k){
-  const wk=mondayOf(k),w=weekDoc(wk);
-  if(!w||!w.myReading||!w.myReading.trim()) return null;
-  const day=planDays(wk,w.myReading).find(d=>d.k===k);
-  return {week:w.myReading.trim(),today:day?day.label:''};
+  const wk=mondayOf(k),txt=pathText(wk);
+  if(!txt) return null;
+  const day=planDays(wk,txt).find(d=>d.k===k);
+  return {week:txt,today:day?day.label:''};
 }
 function isRead(g){const p=gPos(g);return (S.bible.read[String(p.bi)]||[]).indexOf(p.ch)>=0;}
 function renderPlanBox(){
   const box=$('planBox');
   if(!box||!WK.draft) return;
-  const wk=S.weekSel,txt=String(WK.draft.myReading||'').trim();
+  const wk=S.weekSel,path=readPath();
+  const pp=$('pathPick');
+  if(pp) pp.replaceChildren(pathPicker());
+  if(path==='topics'){box.replaceChildren(topicPlanner());return;}
+  const txt=path==='workbook'?pathText(wk):String(WK.draft.myReading||'').trim();
   const kids=[];
-  const sug=suggestReading(wk);
+  if(path==='workbook'){
+    /* the same value as the Midweek meeting card's reading box */
+    const own=nz(WK.draft.reading),shared=!own&&sharedReading(wk,true);
+    const inp=el('input',{type:'text',id:'wbReading',autocomplete:'off',placeholder:shared?shared.text:'For example, Isaiah 58-59'});
+    inp.value=WK.draft.reading||'';
+    inp.addEventListener('input',()=>{WK.draft.reading=inp.value;WK.touch();paintControl(flatFields(WEEK_FIELDS).find(f=>f.prop==='reading'),'df-week',WK.draft.reading,true,WK.draft);});
+    inp.addEventListener('change',()=>WK.onField('reading'));
+    kids.push(labeled("This week's Meeting Workbook reading",inp));
+    kids.push(el('p',{class:'hint'},shared?['Using ',el('b',{text:shared.text}),' from ',el('b',{text:shared.name||'your group'}),'. Type your own to change it.']
+      :(own?'Shared with your groups, so only one person needs to enter it each week.':'Shared with your groups, so only one person needs to enter it.')));
+    if(!txt){box.replaceChildren(...kids);return;}
+  }
+  const sug=path==='whole'?suggestReading(wk):null;
   const useSug=()=>{if(!WK.draft||!sug) return;WK.draft.myReading=sug.text;WK.touch();WK.paint(true);renderPlanBox();renderToday();};
   if(!txt){
     if(sug){
@@ -2001,14 +2049,25 @@ function renderPlanBox(){
   const maxWk=keyOf(addDays(parseKey(mondayOf(t)),7));
   const nextTxt=nw&&nz(nw.myReading);
   const up=nextTxt?{text:nextTxt,planned:true}:suggestReading(nk);
-  if(up&&up.text) kids.push(el('p',{class:'upnext'},
+  if(path==='whole'&&up&&up.text) kids.push(el('p',{class:'upnext'},
     el('span',{text:up.planned?'Next week: ':'Up next: '}),el('b',{text:up.text}),' ',
     nk<=maxWk?el('button',{type:'button',class:'link',onclick:()=>goWeek(nk)},up.planned?'Open':'Plan next week'):null));
   box.replaceChildren(...kids);
 }
 
+/* which topic readings are done, and the day each was ticked: {"0":"2026-11-10"} */
+function normTopicDone(v){
+  const o={};
+  if(v&&typeof v==='object'&&!Array.isArray(v)) Object.keys(v).forEach(i=>{if(/^\d$/.test(i)&&/^\d{4}-\d\d-\d\d$/.test(String(v[i]))) o[i]=v[i];});
+  return o;
+}
 function normBible(v){
-  const o={read:{},rounds:Number(v&&v.rounds)||0,updatedAt:Number(v&&v.updatedAt)||0,goal:/^\d{4}-12-31$/.test(String(v&&v.goal||''))?v.goal:''};
+  const o={read:{},rounds:Number(v&&v.rounds)||0,updatedAt:Number(v&&v.updatedAt)||0,goal:/^\d{4}-12-31$/.test(String(v&&v.goal||''))?v.goal:'',
+    path:PATHS.some(x=>x[0]===(v&&v.path))?v.path:'whole',
+    topic:TOPICS.some(t=>t.id===(v&&v.topic))?v.topic:'',
+    topicStart:/^\d{4}-\d\d-\d\d$/.test(String(v&&v.topicStart||''))?v.topicStart:'',
+    topicDone:normTopicDone(v&&v.topicDone),
+    memorial:!(v&&v.memorial===false)};
   const r=(v&&v.read)||{};
   BOOKS.forEach((b,i)=>{
     const a=Array.isArray(r[String(i)])?r[String(i)]:[];
@@ -2022,6 +2081,7 @@ function saveBible(){
   S.bible.updatedAt=Date.now();
   setStatus('Saving...');
   enqueue('progress','bible',clone(S.bible));
+  try{if(window.SLG) window.SLG.progressChanged();}catch(e){}
 }
 function setBookRead(i,set){
   if(set.size) S.bible.read[String(i)]=Array.from(set).sort((a,b)=>a-b);
@@ -2142,6 +2202,8 @@ function onProgress(snap){
   const queued=window.DSL.outbox().find(x=>x.coll==='progress'&&x.id==='bible');
   if(queued&&queued.data)S.bible=normBible(queued.data);
   else if(d&&!pending.has('progress/bible')&&!writing) S.bible=normBible(d.data());
+  const pathKey=[S.bible.path,S.bible.topic,JSON.stringify(S.bible.topicDone||{}),S.bible.memorial].join('|');
+  if(pathKey!==S.pathKey){S.pathKey=pathKey;if(WK.draft) WK.paint(false);paintHabits();renderToday();}
   if(S.tab==='library'&&S.lib==='bible') renderBible();
   if(S.tab==='week') renderPlanBox();
 }
@@ -2498,7 +2560,7 @@ function syncSection(D,set){
     el('p',{class:'hint',text:'Not needed. This app already has its own sync. Only change this if you want your notes stored in a Firebase project of your own.'}),
     labeled('Firebase config',cfg),
     el('pre',{class:'code',text:FB_RULES}),
-    el('p',{class:'hint',text:'Use these Firestore rules, and add this site under Authentication, Settings, Authorized domains.'}));
+    el('p',{class:'hint',text:'Use these Firestore rules, and add this site under Authentication, Settings, Authorized domains. For groups and notifications, use the full rules in firestore.rules and the functions folder from the app\'s GitHub repository.'}));
   const kids=[el('h3',{text:'Sign in and sync'}),el('p',{class:'hint',id:'s-syncstatus',text:status})];
   if(info.mode==='cloud'){
     const local=D.localDump();
@@ -2525,7 +2587,7 @@ function syncSection(D,set){
   }
   kids.push(msg);
   if(info.mode!=='cloud'||!info.builtIn) kids.push(advanced);
-  return el('section',{class:'setsec'},kids);
+  return el('section',{class:'setsec',id:'syncSection'},kids);
 }
 function backupSection(){
   const area=el('textarea',{id:'s-backup',rows:5,placeholder:'Paste a Study Log backup here to restore it.',autocomplete:'off',spellcheck:'false','aria-label':'Backup JSON'});
@@ -2807,7 +2869,7 @@ function remindersSection(){
   const link=new URL('./',location.href).href;
   return el('section',{class:'setsec'},
     el('h3',{text:'Reminders'}),
-    el('p',{class:'hint',text:'Use the free Shortcuts app on your iPhone to open the Study Log at the same time every day.'}),
+    el('p',{class:'hint',text:'Notifications (above) can remind you once you are signed in. Without an account, use the free Shortcuts app on your iPhone to open the Study Log at the same time every day.'}),
     el('ol',{class:'qlist'},
       el('li',{text:'Open the Shortcuts app, tap Automation, then New Automation (or +).'}),
       el('li',{text:'Choose Time of Day, pick a time such as 7:00 AM, and choose Daily.'}),
@@ -2835,7 +2897,8 @@ function renderSettings(){
   box.replaceChildren(
     el('div',{class:'bar'},el('button',{type:'button',class:'link',onclick:()=>setTab('today')},'Back to Today')),
     el('h2',{class:'sect',text:'Settings'}),
-    displaySection(D),preferencesSection(),dailyTextSection(),weekSection(D),remindersSection(),syncSection(D,D.settings),lockSection(D),aiSection(D,D.settings),backupSection(),trashSec,installSection());
+    displaySection(D),preferencesSection(),pathSection(),dailyTextSection(),weekSection(D),
+    window.SLG?window.SLG.shareSection():null,window.SLG?window.SLG.notifySection():null,remindersSection(),syncSection(D,D.settings),lockSection(D),aiSection(D,D.settings),backupSection(),trashSec,installSection());
 }
 function showSyncNote(note){
   const n=$('syncNote');
@@ -2846,13 +2909,14 @@ function showSyncNote(note){
 function setTab(t){
   S.tab=t;
   document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.tab===t)));
-  ['today','week','library','review','settings'].forEach(x=>{$('view-'+x).hidden=x!==t;});
+  ['today','week','groups','library','review','settings'].forEach(x=>{$('view-'+x).hidden=x!==t;});
   flushAll();
   if(t==='today') renderHome();
   if(t==='week'){WK.load(S.weekSel);MIN.load(minMonth());renderWeek();}
   if(t==='library') showLib();
   if(t==='review') showRev();
   if(t==='settings') renderSettings();
+  if(t==='groups'&&window.SLG) window.SLG.show();
 }
 function showRev(){
   const defs=[['quiz','Quiz'],['verses','Verses'],['month','Month'],['history','History']];
@@ -3105,6 +3169,7 @@ function renderDailyCard(){
 function paintDtHints(){
   const lk=$('link-text');
   if(lk) lk.href=libraryHref(draft.date);
+  try{if(window.SLG) window.SLG.paintShare($('dtShare'),draft.date);}catch(e){}
   const d=dtFor(draft.date);
   const r=$('d-text-ref'),v=$('d-text-vtext');
   if(r) r.placeholder='For example, Psalm 37:4';
@@ -3178,21 +3243,145 @@ function renderBibleIntro(){
     secText?el('p',{class:'introsec',text:secText}):null,bookIntroEl(p0.bi),introLinks(p0.bi,secCh)));
 }
 
+/* ---------- reading paths ---------- */
+function readPath(){return (S.bible&&S.bible.path)||'whole';}
+/* the reading for a week on the chosen path, as text like "Isaiah 58-59" */
+function pathText(wk){
+  const p=readPath(),w=weekDoc(wk);
+  if(p==='workbook') return nz(w&&w.reading)||sharedReading(wk);
+  if(p==='topics') return '';
+  return nz(w&&w.myReading);
+}
+/* the week's Meeting Workbook reading as someone in one of your groups entered it */
+function sharedReading(wk,full){
+  const r=window.SLG&&window.SLG.weekly(wk);
+  if(!r||!nz(r.text)) return full?null:'';
+  return full?r:nz(r.text);
+}
+const PATH_NOTE={
+  whole:'Reading the whole Bible from Genesis to Revelation. Plan a week ahead; each day fills in from Today.',
+  workbook:"The weekly Bible reading from the Meeting Workbook, spread over the week.",
+  topics:'A few days of short readings on one topic at a time.'};
+function setPath(v){
+  if(readPath()===v) return;
+  S.bible.path=v;
+  saveBible();
+  afterPathChange();
+}
+function afterPathChange(){
+  if(WK.draft) WK.paint(true); else renderPlanBox();
+  paintHabits();
+  renderToday();
+  if(S.tab==='settings'){const b=$('pathSection');if(b) b.replaceWith(pathSection());}
+}
+function pathPicker(){
+  const cur=readPath();
+  return el('div',{class:'pathpick'},
+    el('div',{class:'seg3',role:'group','aria-label':'Reading path'},PATHS.map(o=>el('button',{type:'button','aria-pressed':String(cur===o[0]),onclick:()=>setPath(o[0])},o[1]))),
+    el('p',{class:'hint',text:PATH_NOTE[cur]}));
+}
+function topicInfo(){
+  const t=TOPICS.find(x=>x.id===S.bible.topic);
+  const on=S.bible.topicDone||{};
+  return t?{t:t,on:on,done:new Set(Object.keys(on).map(Number))}:null;
+}
+function topicNext(ti){
+  ti=ti||topicInfo();
+  if(!ti) return -1;
+  for(let i=0;i<ti.t.days.length;i++) if(!ti.done.has(i)) return i;
+  return -1;
+}
+function pickTopic(id){
+  S.bible.topic=id;S.bible.topicStart=todayKey();S.bible.topicDone={};
+  saveBible();
+  afterPathChange();
+}
+function markTopic(i,on){
+  const ti=topicInfo();
+  if(!ti) return;
+  const m=Object.assign({},S.bible.topicDone||{});
+  if(on) m[String(i)]=draft.date; else delete m[String(i)];
+  S.bible.topicDone=m;
+  saveBible();
+  if(on&&!draft.bible.done){
+    draft.bible.done=true;
+    if(!draft.bible.ref.trim()) draft.bible.ref=ti.t.days[i][0];
+    touchDay();paintHabits();renderProgress();renderStreaks();
+  }
+  renderPlanBox();renderTodayChapters();
+}
+function topicRow(ti,i,idp){
+  const d=ti.t.days[i],id=idp+i,cb=el('input',{type:'checkbox',id:id}),r=findRefs(d[0])[0];
+  cb.checked=ti.done.has(i);
+  cb.addEventListener('change',()=>markTopic(i,cb.checked));
+  return el('div',{class:'chrow'},cb,el('label',{for:id},el('span',{text:d[0]}),el('small',{class:'chsub',text:'Day '+(i+1)+' · '+d[1]})),
+    r?el('a',{class:'reflink',href:refHref(r)},'Open'):null);
+}
+function topicPlanner(){
+  const ti=topicInfo();
+  const grid=el('div',{class:'topics',role:'group','aria-label':'Topics'},TOPICS.map(t=>el('button',{type:'button',class:'topic','aria-pressed':String(!!ti&&ti.t.id===t.id),
+    onclick:()=>{if(!ti||ti.t.id!==t.id) pickTopic(t.id);}},t.label)));
+  if(!ti) return el('div',{class:'topicwrap'},el('p',{class:'hint',text:"What's on your mind? Pick a topic. Each one is five days of short readings."}),grid);
+  const n=ti.t.days.filter((d,i)=>ti.done.has(i)).length;
+  return el('div',{class:'topicwrap'},grid,
+    el('div',{class:'topiccard'},
+      el('p',{class:'cap',text:ti.t.label+' · '+n+' of '+ti.t.days.length+' read'}),
+      el('p',{class:'hint',text:ti.t.about}),
+      el('div',{class:'todaych'},ti.t.days.map((d,i)=>topicRow(ti,i,'tp-'))),
+      n===ti.t.days.length?el('p',{class:'hint',text:'Topic finished. Pick another one when you are ready.'}):null,
+      el('a',{class:'link',href:'https://www.jw.org/en/search/?q='+encodeURIComponent(ti.t.q),target:'_blank',rel:'noopener'},'Read more on this topic at jw.org')));
+}
+/* Today's box on the topic path: the next reading, or a nudge to pick a topic */
+function topicToday(){
+  const ti=topicInfo();
+  if(!ti) return [el('p',{class:'boxlabel',text:"Today's reading"}),
+    el('p',{class:'hint',text:'You are reading by topic. Pick a topic to start.'}),
+    el('button',{type:'button',class:'btn ghost',style:'align-self:flex-start',onclick:()=>{setTab('week');const c=$('planCard');if(c) c.scrollIntoView({block:'start'});}},'Pick a topic')];
+  /* the reading ticked on this day stays put; otherwise the next one not read yet */
+  const ticked=Object.keys(ti.on).find(x=>ti.on[x]===draft.date);
+  const i=ticked!=null?Number(ticked):topicNext(ti);
+  if(i<0) return [el('p',{class:'boxlabel',text:ti.t.label}),
+    el('p',{class:'hint',text:'You finished this topic.'}),
+    el('button',{type:'button',class:'btn ghost',style:'align-self:flex-start',onclick:()=>{setTab('week');const c=$('planCard');if(c) c.scrollIntoView({block:'start'});}},'Pick the next topic')];
+  return [el('p',{class:'boxlabel',text:"Today's reading · "+ti.t.label}),el('div',{class:'todaych'},topicRow(ti,i,'tt-'))];
+}
+/* In the weeks before the Memorial, the daily text book lists a Bible reading for each day */
+function memorialEl(k){
+  if(S.bible.memorial===false) return null;
+  const d=dtFor(k);
+  if(!d||!d.memorial) return null;
+  const seen=new Set(),refs=findRefs(d.memorial).filter(r=>!seen.has(r.label)&&seen.add(r.label));
+  if(!refs.length) return null;
+  return el('div',{class:'memread'},el('p',{class:'boxlabel',text:'Memorial Bible reading'}),
+    el('div',{class:'refchips'},refs.map(r=>el('a',{class:'refchip',href:refHref(r)},r.label))));
+}
+function pathSection(){
+  const mem=el('input',{type:'checkbox',id:'pref-memorial'});
+  mem.checked=S.bible.memorial!==false;
+  mem.onchange=()=>{S.bible.memorial=mem.checked;saveBible();renderTodayChapters();};
+  return el('section',{class:'setsec',id:'pathSection'},el('h3',{text:'Bible reading path'}),
+    pathPicker(),
+    el('div',{class:'checkrow'},mem,el('label',{for:mem.id,text:'Add the Memorial Bible reading in the days before the Memorial'})),
+    el('p',{class:'hint',text:'The Memorial reading comes from your daily text book, so it shows once you have added the book under Daily text.'}));
+}
+
 /* Bible reading: today's planned chapters, each with a box to tick and a link into JW Library.
    Ticking them all checks off Bible reading for the day. */
 function chapterHref(g){const p=gPos(g);return 'jwlibrary:///finder?wtlocale=E&prefer=lang&pub=nwtsty&bible='+String(p.bi+1).padStart(2,'0')+String(p.ch).padStart(3,'0')+'001';}
 function todayChapters(k){
-  const wk=mondayOf(k),w=weekDoc(wk);
-  if(!w||!nz(w.myReading)) return [];
-  const day=planDays(wk,w.myReading).find(x=>x.k===k);
+  const wk=mondayOf(k),txt=pathText(wk);
+  if(!txt) return [];
+  const day=planDays(wk,txt).find(x=>x.k===k);
   return day?day.chs:[];
 }
 function renderTodayChapters(){
   renderBibleIntro();
   const box=$('todayCh');
   if(!box) return;
+  const memo=memorialEl(draft.date);
+  if(readPath()==='topics'&&!offPlan.has(draft.date)){box.replaceChildren(...topicToday().concat(memo?[memo]:[]));return;}
   const chs=todayChapters(draft.date);
-  if(!chs.length){box.replaceChildren();return;}
+  if(!chs.length){box.replaceChildren(...(memo?[memo]:[]));return;}
   box.replaceChildren(el('p',{class:'boxlabel',text:"Today's chapters"}),
     el('div',{class:'todaych'},chs.map(g=>{
       const id='tch-'+g,cb=el('input',{type:'checkbox',id:id});
@@ -3210,7 +3399,7 @@ function renderTodayChapters(){
       });
       return el('div',{class:'chrow'},cb,el('label',{for:id,text:rangeLabel(g,g)}),el('a',{class:'reflink',href:chapterHref(g)},'Open'));
     })),
-    offPlan.has(draft.date)?null:el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>{offPlan.add(draft.date);paintHabits();const r=$('d-bible-ref');if(r) r.focus();}},'Read something different?'));
+    offPlan.has(draft.date)?null:el('button',{type:'button',class:'link',style:'align-self:flex-start',onclick:()=>{offPlan.add(draft.date);paintHabits();const r=$('d-bible-ref');if(r) r.focus();}},'Read something different?'),memo);
 }
 const dtLine=d=>d.quote+'—'+d.ref+(/[.!?]$/.test(d.ref)?'':'.');
 function fillDtScripture(){
@@ -3729,6 +3918,20 @@ renderToday();
 renderLibTabs();
 setTab('today');
 setStatus('Loading your entries...');
+/* what together.js (groups and notifications) uses from here */
+window.SLAPP={el:el,svg:svg,ICON_LEFT:ICON_LEFT,ICON_RIGHT:ICON_RIGHT,$:$,todayKey:todayKey,keyOf:keyOf,parseKey:parseKey,addDays:addDays,mondayOf:mondayOf,fmtDay:fmtDay,nz:nz,cut:cut,
+  dtFor:dtFor,dtLine:dtLine,findRefs:findRefs,refHref:refHref,libraryHref:libraryHref,setTab:setTab,setStatus:setStatus,labeled:labeled,
+  tab:()=>S.tab,
+  day:k=>eff()[k]||null,
+  streak:key=>streakFor(key,eff()),
+  readInfo:()=>{
+    const p=readPath(),ti=topicInfo();
+    return {path:p,label:p==='topics'?(ti?'Topic: '+ti.t.label:'Reading by topic'):p==='workbook'?'Meeting Workbook reading':'Reading the whole Bible',read:countRead(),total:TOTAL_CH};
+  },
+  openDay:(k,habit)=>{setTab('today');openTarget({coll:'days',id:k,habit:habit||'text'});},
+  refreshPlan:()=>{if(S.tab==='week') renderPlanBox();renderToday();renderTodayChapters();},
+  goSettings:id=>{setTab('settings');const b=$(id);if(b) b.scrollIntoView({block:'start'});}
+};
 
 (async function connect(){
   const slow=setTimeout(()=>{if(!S.fresh) setStatus('Still loading your entries...');},10000);
@@ -3737,6 +3940,7 @@ setStatus('Loading your entries...');
   S.connecting=false;
   if(!conn||!conn.root){
     clearTimeout(slow);
+    window.SLAPP.conn={mode:'none'};
     S.fresh=true;
     setStatus('Saving is not available in this browser.','err');
     renderToday();
@@ -3775,5 +3979,8 @@ setStatus('Loading your entries...');
     const inCloud=new Set(snap.docs.map(d=>d.id));
     Object.keys(DT.years).filter(y=>!inCloud.has(y)&&!DT.uploaded[y]).forEach(y=>{DT.uploaded[y]=true;S.root.collection('dailytext').doc(y).set(DT.years[y]).catch(()=>{});});
   },()=>{});
+  /* groups and notifications (together.js) start once the connection is known */
+  window.SLAPP.conn={mode:S.mode};
+  try{if(window.SLG) window.SLG.start();}catch(e){}
 })();
 })();

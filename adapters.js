@@ -157,11 +157,20 @@ function parseFbConfig(text){
   String(text||'').replace(/["']?(\w+)["']?\s*:\s*["']([^"']*)["']/g,(m,k,v)=>{cfg[k]=v;return m;});
   return (cfg.apiKey&&cfg.projectId)?cfg:null;
 }
+async function loadMessaging(){
+  if(window.firebase&&window.firebase.messaging) return;
+  await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+}
 async function fbInit(){
   const cfg=parseFbConfig(fbConfigText());
   if(!cfg) throw Object.assign(new Error('config'),{code:'bad_config'});
   await withTimeout(loadFirebase(),15000);
-  if(!window.firebase.apps.length) window.firebase.initializeApp(cfg);
+  if(!window.firebase.apps.length){
+    window.firebase.initializeApp(cfg);
+    /* automated tests point the app at the local Firebase emulators */
+    const emu=lsGet('dsl.emulator');
+    if(emu){window.firebase.auth().useEmulator('http://'+emu+':9099');window.firebase.firestore().useEmulator(emu,8080);}
+  }
   return window.firebase;
 }
 // A durable outbox survives reloads, including when Firestore persistence is unavailable.
@@ -238,6 +247,7 @@ async function connectCloud(){
   const fs=fb.firestore();
   try{await fs.enablePersistence({synchronizeTabs:true});}catch(e){}
   state.email=user.email||'';
+  state.uid=user.uid;state.fs=fs;
   outboxKey='dsl.outbox:'+cfg.projectId+':'+user.uid;
   try{outbox=readOutbox();}catch(e){throw new Error('Cannot read pending changes.');}
   const root=wrapRoot(fs.doc('users/'+user.uid+'/app/tracker'));
@@ -364,6 +374,9 @@ window.DSL={
   syncStatus:syncStatus,
   retrySync:()=>{cloudError='';sendOutbox();},
   outbox:()=>Object.values(outbox),
-  localDump:localDump
+  localDump:localDump,
+  /* groups and notifications talk to Firebase directly; null when not signed in */
+  cloud:()=>state.mode==='cloud'&&state.fs?{fs:state.fs,uid:state.uid,email:state.email,firebase:window.firebase,
+    projectId:(parseFbConfig(fbConfigText())||{}).projectId,builtIn:!String(settings.firebase||'').trim(),loadMessaging:loadMessaging}:null
 };
 })();
