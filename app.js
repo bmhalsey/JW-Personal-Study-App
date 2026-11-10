@@ -339,7 +339,7 @@ function toggleCard(key,force){
   const sec=b.parentNode;
   sec.classList.toggle('open',open);
   sec.querySelector('.wcard-toggle').setAttribute('aria-expanded',String(open));
-  if(open) b.querySelectorAll('textarea').forEach(autoGrow);
+  if(open) b.querySelectorAll('textarea').forEach(t=>autoGrow(t,true));
 }
 function paintSummaries(fields,idPrefix,d){
   fields.forEach(f=>{
@@ -349,10 +349,19 @@ function paintSummaries(fields,idPrefix,d){
   });
 }
 /* text boxes start small and grow with what you write */
-function autoGrow(t){
+/* While you type, a box only ever grows (never shrinks and regrows), so the page does not
+   bounce on phones. It is resized to fit exactly when you leave the box, keeping the page
+   where it was. */
+function autoGrow(t,exact){
   if(!t||t.offsetParent===null) return;
+  if(!exact){
+    if(t.scrollHeight>t.clientHeight+1) t.style.height=Math.min(t.scrollHeight+2,1200)+'px';
+    return;
+  }
+  const y=window.scrollY;
   t.style.height='auto';
   t.style.height=Math.min(t.scrollHeight+2,1200)+'px';
+  if(window.scrollY!==y) window.scrollTo(0,y);
 }
 function paintControl(f,idPrefix,value,force,data){
   const d=data||{};
@@ -369,7 +378,7 @@ function paintControl(f,idPrefix,value,force,data){
   if(f.type==='check'){i.checked=!!value;return;}
   const v=String(value==null?'':value);
   if((force||i!==document.activeElement)&&i.value!==v) i.value=v;
-  if(i.tagName==='TEXTAREA') autoGrow(i);
+  if(i.tagName==='TEXTAREA') autoGrow(i,i!==document.activeElement);
   if(f.link){const a=document.getElementById(idPrefix+'-'+f.prop+'-link');if(a) refLink(a,i.value);}
   if(f.multi&&!f.noChips){const c=document.getElementById(idPrefix+'-'+f.prop+'-refs');if(c) refChips(c,i.value);}
 }
@@ -1176,7 +1185,7 @@ function buildHabits(){
     const mk=f=>mkControl(f,'d-'+k,(prop,val)=>{
       draft[k][prop]=val;draft[k].updatedAt=Date.now();
       const filled=k==='text'&&prop!=='ref'&&prop!=='vtext'&&fillDtScripture();
-      touchDay();paintSummary(k);paintActions(k);
+      touchDay();paintActions(k);
       if(filled) paintHabits();
     });
     const fields=hb.fields.filter(f=>!f.more&&!f.inWriter).map(mk);
@@ -1213,6 +1222,10 @@ function buildHabits(){
       el('div',{class:'habit-details'},tg,body)));
   });
 }
+document.addEventListener('focusout',e=>{
+  const b=e.target&&e.target.closest&&e.target.closest('.habit-body');
+  if(b) HABITS.forEach(hb=>{if(b.id==='body-'+hb.key) paintSummary(hb.key);});
+});
 function paintSummary(k){
   const s=draft[k];
   const n=$('sum-'+k);
@@ -3340,7 +3353,9 @@ function setupFormatting(){
     },350);
   });
   document.addEventListener('input',e=>{const t=e.target;if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')) autoGrow(t);});
-  window.addEventListener('resize',()=>document.querySelectorAll('textarea.fmt').forEach(autoGrow));
+  document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.tagName==='TEXTAREA'&&t.classList.contains('fmt')) setTimeout(()=>autoGrow(t,true),400);});
+  let rw=window.innerWidth;
+  window.addEventListener('resize',()=>{if(window.innerWidth===rw) return;rw=window.innerWidth;document.querySelectorAll('textarea.fmt').forEach(t=>autoGrow(t,t!==document.activeElement));});
   /* Enter continues a list; Enter on an empty item ends it */
   document.addEventListener('beforeinput',e=>{
     const ta=e.target;

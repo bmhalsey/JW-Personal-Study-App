@@ -66,7 +66,10 @@ button,input,textarea,select{font-family:inherit}
 
 .mast{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap}
 .brand{margin:0;font:600 13px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.status{margin:0;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.status{margin:0;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;white-space:nowrap;min-width:0}
+#statusText{overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+/* stop phones from adjusting text size when the keyboard opens */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .status.err{color:var(--danger)}
 .link{background:none;border:0;padding:4px 0;min-height:32px;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer}
 
@@ -344,7 +347,7 @@ pre.code{margin:0;padding:10px;background:var(--surface);border:1px solid var(--
 .qn{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:var(--accent);color:var(--accent-fg);font-size:12px;font-weight:700;vertical-align:1px}
 .kindrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .kindrow label{font-size:14px;font-weight:600;color:var(--muted)}
-.kindrow select{width:auto;min-height:38px;padding:6px 10px;font-size:15px}
+.kindrow select{width:auto;min-height:38px;padding:6px 10px;font-size:16px}
 .morebtn.dashed{background:transparent;border:1px dashed var(--line-strong)}
 #saveVerseSlot:empty,#saveQSlot:empty{display:none}
 #saveVerseSlot .btn,#saveQSlot .btn{min-height:38px;font-size:14px}
